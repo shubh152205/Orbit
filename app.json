@@ -53,6 +53,12 @@
         }
       ],
       "./plugins/withAndroidPiP.js"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ad268198-a3fe-4028-b454-093cd5fe6d2f"
+      }
+    },
+    "owner": "shubh0522"
   }
 }
