@@ -52,7 +52,8 @@
           "supportsPictureInPicture": true
         }
       ],
-      "./plugins/withAndroidPiP.js"
+      "./plugins/withAndroidPiP.js",
+      "expo-asset"
     ],
     "extra": {
       "eas": {
