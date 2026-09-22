@@ -75,8 +75,8 @@ class BraveShieldsModule(reactContext: ReactApplicationContext) :
                 reactContext
                     .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                     ?.emit(EVENT_AD_BLOCKED, params)
-            } catch (e: Exception) {
-                // Ignore if JS engine is temporarily detached
+            } catch (t: Throwable) {
+                // Ignore if JS engine is temporarily detached or bridge unready
             }
         }
     }

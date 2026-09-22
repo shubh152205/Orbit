@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <algorithm>
 #include <cstring>
+#include <mutex>
 #include <android/log.h>
 
 #define TAG "BraveShieldsJNI"
@@ -52,6 +53,7 @@ struct FilterRule {
 
 class AdBlockEngine {
 public:
+    mutable std::mutex engineMutex;
     std::vector<FilterRule> networkRules;
     std::vector<FilterRule> exceptionRules;
     std::unordered_set<std::string> blockedDomains;
@@ -64,6 +66,8 @@ public:
         if (line.empty() || line[0] == '!' || line[0] == '[') {
             return; // Comment or metadata
         }
+
+        std::lock_guard<std::mutex> lock(engineMutex);
 
         // Cosmetic rules: domain##selector or ##selector
         size_t cosmeticPos = line.find("##");
@@ -131,11 +135,14 @@ public:
     }
 
     void compile() {
+        std::lock_guard<std::mutex> lock(engineMutex);
         LOGI("Engine compiled: %zu network rules, %zu exception rules, %zu fast domains, %zu cosmetic domains",
              networkRules.size(), exceptionRules.size(), blockedDomains.size(), cosmeticRules.size());
     }
 
     bool shouldBlock(const std::string& url, const std::string& host, const std::string& firstPartyHost, const std::string& resourceTypeStr, bool isThirdParty) const {
+        std::lock_guard<std::mutex> lock(engineMutex);
+
         // Never block actual video delivery streams or internal YouTube endpoints
         if (host.find("googlevideo.com") != std::string::npos ||
             host.find("youtube.com") != std::string::npos ||
@@ -190,6 +197,7 @@ public:
     }
 
     std::vector<std::string> getCosmeticRulesForHost(const std::string& host) const {
+        std::lock_guard<std::mutex> lock(engineMutex);
         std::vector<std::string> result;
 
         // Global cosmetic rules (##selector)
@@ -349,12 +357,19 @@ Java_com_streamnest_app_adblock_BraveNativeEngine_nativeGetCosmeticRules(
     if (hostStr && host) env->ReleaseStringUTFChars(hostStr, host);
 
     jclass stringClass = env->FindClass("java/lang/String");
+    if (!stringClass) return nullptr;
+
     jobjectArray result = env->NewObjectArray(static_cast<jsize>(rules.size()), stringClass, nullptr);
-    for (size_t i = 0; i < rules.size(); ++i) {
-        jstring rule = env->NewStringUTF(rules[i].c_str());
-        env->SetObjectArrayElement(result, static_cast<jsize>(i), rule);
-        env->DeleteLocalRef(rule);
+    if (result) {
+        for (size_t i = 0; i < rules.size(); ++i) {
+            jstring rule = env->NewStringUTF(rules[i].c_str());
+            if (rule) {
+                env->SetObjectArrayElement(result, static_cast<jsize>(i), rule);
+                env->DeleteLocalRef(rule);
+            }
+        }
     }
+    env->DeleteLocalRef(stringClass);
     return result;
 }
 

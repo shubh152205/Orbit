@@ -23,48 +23,52 @@ class BraveShieldsWebViewClient(private val reactContext: ReactContext?) : RNCWe
             return super.shouldInterceptRequest(view, request)
         }
 
-        val requestUri = request.url ?: return super.shouldInterceptRequest(view, request)
-        val url = requestUri.toString()
-        val host = requestUri.host ?: ""
+        try {
+            val requestUri = request.url ?: return super.shouldInterceptRequest(view, request)
+            val url = requestUri.toString()
+            val host = requestUri.host ?: ""
 
-        // Determine First-Party Host
-        val pageUri = view.url?.let { Uri.parse(it) }
-        val firstPartyHost = pageUri?.host ?: ""
+            // Determine First-Party Host
+            val pageUri = view.url?.let { Uri.parse(it) }
+            val firstPartyHost = pageUri?.host ?: ""
 
-        val isThirdParty = if (host.isNotEmpty() && firstPartyHost.isNotEmpty()) {
-            !host.equals(firstPartyHost, ignoreCase = true) &&
-                    !host.endsWith(".$firstPartyHost", ignoreCase = true) &&
-                    !firstPartyHost.endsWith(".$host", ignoreCase = true)
-        } else {
-            false
-        }
-
-        // Determine Resource Type
-        val resourceType = detectResourceType(request, requestUri)
-
-        // Evaluate against Brave & AdGuard Native Engine via JNI
-        val isBlocked = BraveNativeEngine.shouldBlockUrl(
-            url,
-            host,
-            firstPartyHost,
-            resourceType,
-            isThirdParty
-        )
-
-        if (isBlocked) {
-            val total = BraveNativeEngine.incrementBlockedCount()
-
-            // Notify React Native bridge of blocked ad
-            reactContext?.let { ctx ->
-                BraveShieldsModule.sendAdBlockedEvent(ctx, url, host, resourceType, total)
+            val isThirdParty = if (host.isNotEmpty() && firstPartyHost.isNotEmpty()) {
+                !host.equals(firstPartyHost, ignoreCase = true) &&
+                        !host.endsWith(".$firstPartyHost", ignoreCase = true) &&
+                        !firstPartyHost.endsWith(".$host", ignoreCase = true)
+            } else {
+                false
             }
 
-            // Return empty WebResourceResponse to immediately terminate the request
-            return WebResourceResponse(
-                "text/plain",
-                "UTF-8",
-                ByteArrayInputStream(ByteArray(0))
+            // Determine Resource Type
+            val resourceType = detectResourceType(request, requestUri)
+
+            // Evaluate against Brave & AdGuard Native Engine via JNI
+            val isBlocked = BraveNativeEngine.shouldBlockUrl(
+                url,
+                host,
+                firstPartyHost,
+                resourceType,
+                isThirdParty
             )
+
+            if (isBlocked) {
+                val total = BraveNativeEngine.incrementBlockedCount()
+
+                // Notify React Native bridge of blocked ad
+                reactContext?.let { ctx ->
+                    BraveShieldsModule.sendAdBlockedEvent(ctx, url, host, resourceType, total)
+                }
+
+                // Return empty WebResourceResponse to immediately terminate the request
+                return WebResourceResponse(
+                    "text/plain",
+                    "UTF-8",
+                    ByteArrayInputStream(ByteArray(0))
+                )
+            }
+        } catch (t: Throwable) {
+            // Guarantee WebView never crashes on interception errors
         }
 
         return super.shouldInterceptRequest(view, request)
