@@ -67,12 +67,40 @@ function withAndroidPiP(config) {
     // Inject onUserLeaveHint and onPictureInPictureModeChanged methods if not already present
     if (!src.includes('override fun onUserLeaveHint()')) {
       const pipMethods = `
+  companion object {
+    @Volatile
+    var isVideoPlaying: Boolean = false
+
+    @Volatile
+    var isAutoPipEnabled: Boolean = true
+
+    fun updatePipState(activity: MainActivity?, isPlaying: Boolean, autoPipEnabled: Boolean) {
+      isVideoPlaying = isPlaying
+      isAutoPipEnabled = autoPipEnabled
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && activity != null) {
+        try {
+          val aspectRatio = Rational(16, 9)
+          val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(aspectRatio)
+            .setAutoEnterEnabled(isPlaying && autoPipEnabled)
+          activity.setPictureInPictureParams(builder.build())
+        } catch (e: Exception) {
+          // Ignore
+        }
+      }
+    }
+  }
+
   /**
    * System-level Picture-in-Picture trigger:
    * Called when the user presses Home or switches apps.
+   * STRICT CHECK: Only enter PiP if a video is actively playing!
    */
   override fun onUserLeaveHint() {
     super.onUserLeaveHint()
+    if (!isVideoPlaying || !isAutoPipEnabled) {
+      return
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       try {
         val aspectRatio = Rational(16, 9)

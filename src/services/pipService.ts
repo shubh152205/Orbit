@@ -36,3 +36,25 @@ export async function isSystemPipSupported(): Promise<boolean> {
   }
   return false
 }
+
+/**
+ * Synchronizes video playback and auto-PiP preference with Android native layer.
+ * When isPlaying is false, system Picture-in-Picture on swipe-home is strictly disabled.
+ */
+export async function setSystemPipVideoPlaybackState(
+  isPlaying: boolean,
+  autoPipEnabled: boolean = true
+): Promise<boolean> {
+  if (Platform.OS !== 'android') return false
+
+  if (PipModule && typeof PipModule.setVideoPlaybackState === 'function') {
+    try {
+      await PipModule.setVideoPlaybackState(isPlaying, autoPipEnabled)
+      return true
+    } catch (err) {
+      console.warn('Failed to update PiP video playback state:', err)
+      return false
+    }
+  }
+  return false
+}

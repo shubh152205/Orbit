@@ -41,6 +41,18 @@ class PipModule(private val reactContext: ReactApplicationContext) : ReactContex
     }
 
     @ReactMethod
+    fun setVideoPlaybackState(isPlaying: Boolean, autoPipEnabled: Boolean, promise: Promise) {
+        val activity = currentActivity as? com.streamnest.app.MainActivity
+        activity?.runOnUiThread {
+            com.streamnest.app.MainActivity.updatePipState(activity, isPlaying, autoPipEnabled)
+        } ?: run {
+            com.streamnest.app.MainActivity.isVideoPlaying = isPlaying
+            com.streamnest.app.MainActivity.isAutoPipEnabled = autoPipEnabled
+        }
+        promise.resolve(true)
+    }
+
+    @ReactMethod
     fun isPipSupported(promise: Promise) {
         val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                 reactContext.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)

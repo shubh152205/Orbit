@@ -36,7 +36,7 @@ import {
 
 import { LiquidGlassNavBar } from './src/components/LiquidGlassNavBar'
 import { BrowserView, BrowserViewRef } from './src/components/BrowserView'
-import { enterSystemPictureInPicture } from './src/services/pipService'
+import { enterSystemPictureInPicture, setSystemPipVideoPlaybackState } from './src/services/pipService'
 import { LiquidGlassContainer } from './src/components/LiquidGlass'
 import { NativeDownloadManager } from './src/components/NativeDownloadManager'
 import { NativePortalsDirectory } from './src/components/NativePortalsDirectory'
@@ -129,6 +129,7 @@ function MainStreamNestApp() {
   const systemColorScheme = useColorScheme()
   const [webThemeMode, setWebThemeMode] = useState<ThemeMode>('dark')
   const [isVideoPlayingOnPage, setIsVideoPlayingOnPage] = useState(false)
+  const [isCinemaPlaying, setIsCinemaPlaying] = useState(false)
 
   // Load saved appearance theme mode
   useEffect(() => {
@@ -477,40 +478,22 @@ function MainStreamNestApp() {
     setActiveTab('browser')
   }
 
-  // Handle message from WebView (Brave Shields counters & Soul video sniffer)
-  const handleWebViewMessage = (event: any) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data)
-      if (data.type === 'SHIELDS_ADS_BLOCKED') {
-        setBlockedAdsCount((prev) => Math.max(prev, data.count))
-      } else if (data.type === 'VIDEO_STREAM_STATUS') {
-        setIsVideoPlayingOnPage(Boolean(data.isStreaming))
-      } else if (data.type === 'STREAM_SNIFFED' && data.sourceUrl) {
-        setIsVideoPlayingOnPage(true)
-        if (!dismissedStreamUrlsRef.current.has(data.sourceUrl)) {
-          setSniffedStream({
-            id: `sniffed-${data.sourceUrl}`,
-            title: data.title || pageTitle || 'Soul Cinema Stream',
-            sourceUrl: data.sourceUrl,
-            duration: data.duration ? `${Math.round(data.duration / 60)} min` : '1080p HD',
-            quality: '1080p Ultra',
-          })
-        }
-      }
-    } catch {}
-  }
+  const isAnyVideoPlaying = (isCinemaMode && isCinemaPlaying) || (!isCinemaMode && isVideoPlayingOnPage)
 
-  // Brave Shields Network Interceptor
-  const handleShouldStartLoadWithRequest = (request: any) => {
-    const isBlocked = shouldBlockRequest(request.url, shieldsEnabled)
-    if (isBlocked) {
-      setBlockedAdsCount((prev) => prev + 1)
-      return false
-    }
-    return true
-  }
+  // Synchronize Android Native System PiP capability:
+  // Auto-enter PiP on swipe-home is strictly locked unless a video is actively playing.
+  useEffect(() => {
+    setSystemPipVideoPlaybackState(isAnyVideoPlaying, autoPipEnabled).catch(() => {})
+  }, [isAnyVideoPlaying, autoPipEnabled])
 
   const handleTogglePip = async (posMillis?: number) => {
+    if (!isAnyVideoPlaying && !sniffedStream && !isCinemaMode) {
+      Alert.alert(
+        'No Active Video Stream',
+        'Picture-in-Picture mode activates when a video is actively playing on the page or in cinema mode.'
+      )
+      return
+    }
     if (typeof posMillis === 'number') {
       setVideoPlaybackPositionMillis(posMillis)
     }
@@ -533,6 +516,7 @@ function MainStreamNestApp() {
   const handlePlayDownloadedVideo = (video: VideoStreamItem) => {
     setActiveVideo(video)
     setIsCinemaMode(true)
+    setIsCinemaPlaying(true)
     setActiveTab('cinema')
   }
 
@@ -657,8 +641,10 @@ function MainStreamNestApp() {
             video={activeVideo}
             initialPositionMillis={videoPlaybackPositionMillis}
             autoStartPip={autoStartPip}
+            onPlaybackStateChange={setIsCinemaPlaying}
             onClose={(pos) => {
               setAutoStartPip(false)
+              setIsCinemaPlaying(false)
               if (typeof pos === 'number') setVideoPlaybackPositionMillis(pos)
               setIsCinemaMode(false)
               setActiveTab('browser')
@@ -695,9 +681,21 @@ function MainStreamNestApp() {
                 setLoadProgress(progress)
                 setIsLoading(progress < 1)
               }}
-              onLoadStart={() => setIsLoading(true)}
+              onLoadStart={() => {
+                setIsLoading(true)
+                setIsVideoPlayingOnPage(false)
+              }}
               onLoadEnd={() => setIsLoading(false)}
-              onBlockedAd={() => setBlockedAdsCount((prev) => prev + 1)}
+              onBlockedAd={(count) => {
+                if (typeof count === 'number') {
+                  setBlockedAdsCount((prev) => Math.max(prev, count))
+                } else {
+                  setBlockedAdsCount((prev) => prev + 1)
+                }
+              }}
+              onVideoStreamStatus={(isStreaming) => {
+                setIsVideoPlayingOnPage(isStreaming)
+              }}
               onMediaDetected={(media) => {
                 setIsVideoPlayingOnPage(true)
                 if (!dismissedStreamUrlsRef.current.has(media.sourceUrl)) {

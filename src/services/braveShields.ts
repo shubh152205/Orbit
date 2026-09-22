@@ -329,13 +329,15 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
 
   // 5. SOUL BROWSER VIDEO SNIFFER ENGINE & ACTIVE STREAM DETECTOR
   var lastReportedSrc = '';
+  var lastReportedStreamingStatus = null;
   function sniffSoulVideo() {
     var vids = document.getElementsByTagName('video');
-    var isAnyVideoActive = false;
+    var isAnyVideoPlaying = false;
     for (var i = 0; i < vids.length; i++) {
       var v = vids[i];
-      if (v && (!v.paused || v.currentTime > 0)) {
-        isAnyVideoActive = true;
+      // A video is only playing if it is actively not paused, not ended, and has progressed
+      if (v && !v.paused && !v.ended && v.currentTime > 0) {
+        isAnyVideoPlaying = true;
       }
       var src = v.currentSrc || v.src;
       if (src && src.startsWith('http') && !src.includes('blob:') && src !== lastReportedSrc) {
@@ -350,11 +352,14 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
         }
       }
     }
-    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'VIDEO_STREAM_STATUS',
-        isStreaming: isAnyVideoActive || (vids.length > 0 && isAnyVideoActive)
-      }));
+    if (isAnyVideoPlaying !== lastReportedStreamingStatus) {
+      lastReportedStreamingStatus = isAnyVideoPlaying;
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'VIDEO_STREAM_STATUS',
+          isStreaming: isAnyVideoPlaying
+        }));
+      }
     }
   }
 
@@ -484,6 +489,17 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
   document.addEventListener('play', sniffSoulVideo, true);
   document.addEventListener('playing', sniffSoulVideo, true);
   document.addEventListener('pause', sniffSoulVideo, true);
+  document.addEventListener('ended', sniffSoulVideo, true);
+  document.addEventListener('emptied', sniffSoulVideo, true);
+  document.addEventListener('abort', sniffSoulVideo, true);
+  window.addEventListener('beforeunload', function() {
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'VIDEO_STREAM_STATUS',
+        isStreaming: false
+      }));
+    }
+  });
 })();
 true;
 `

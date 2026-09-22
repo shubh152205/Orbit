@@ -46,6 +46,7 @@ interface SoulVideoPlayerProps {
   autoStartPip?: boolean
   onClose: (currentPositionMillis?: number) => void
   onTogglePip: (currentPositionMillis?: number) => void
+  onPlaybackStateChange?: (isPlaying: boolean) => void
 }
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
@@ -57,6 +58,7 @@ export function SoulVideoPlayer({
   autoStartPip = false,
   onClose,
   onTogglePip,
+  onPlaybackStateChange,
 }: SoulVideoPlayerProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const videoViewRef = useRef<VideoView>(null)
@@ -121,8 +123,13 @@ export function SoulVideoPlayer({
       player.currentTime = initialPositionMillis / 1000
     }
 
+    if (player.playing) {
+      onPlaybackStateChange?.(true)
+    }
+
     const playingSub = player.addListener('playingChange', (event) => {
       setIsPlaying(event.isPlaying)
+      onPlaybackStateChange?.(event.isPlaying)
     })
 
     const timeSub = player.addListener('timeUpdate', (event) => {
@@ -143,8 +150,9 @@ export function SoulVideoPlayer({
       playingSub.remove()
       timeSub.remove()
       statusSub.remove()
+      onPlaybackStateChange?.(false)
     }
-  }, [player, initialPositionMillis])
+  }, [player, initialPositionMillis, onPlaybackStateChange])
 
   // Auto-initiate System PiP when requested from Dynamic Island
   useEffect(() => {

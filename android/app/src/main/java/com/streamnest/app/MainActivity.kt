@@ -14,20 +14,51 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate
 import expo.modules.ReactActivityDelegateWrapper
 
 class MainActivity : ReactActivity() {
+
+  companion object {
+    @Volatile
+    var isVideoPlaying: Boolean = false
+
+    @Volatile
+    var isAutoPipEnabled: Boolean = true
+
+    fun updatePipState(activity: MainActivity?, isPlaying: Boolean, autoPipEnabled: Boolean) {
+      isVideoPlaying = isPlaying
+      isAutoPipEnabled = autoPipEnabled
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && activity != null) {
+        try {
+          val aspectRatio = Rational(16, 9)
+          val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(aspectRatio)
+            .setAutoEnterEnabled(isPlaying && autoPipEnabled)
+          activity.setPictureInPictureParams(builder.build())
+        } catch (e: Exception) {
+          // Ignore
+        }
+      }
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     // Set the theme to AppTheme BEFORE onCreate to support
     // coloring the background, status bar, and navigation bar.
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme)
     super.onCreate(null)
+    // By default, no video is playing: ensure auto-enter PiP is strictly disabled
+    updatePipState(this, false, isAutoPipEnabled)
   }
 
   /**
    * System-level Picture-in-Picture trigger:
    * Called when user presses Home, swipes up to Home, or switches apps.
+   * STRICT CHECK: Only enter PiP if a video is actively playing!
    */
   override fun onUserLeaveHint() {
     super.onUserLeaveHint()
+    if (!isVideoPlaying || !isAutoPipEnabled) {
+      return
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       try {
         val aspectRatio = Rational(16, 9)

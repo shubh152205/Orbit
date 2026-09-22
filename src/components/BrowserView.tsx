@@ -36,7 +36,8 @@ export interface BrowserViewProps {
   onLoadEnd?: () => void
   onError?: (error: any) => void
   onMediaDetected?: (media: VideoStreamItem) => void
-  onBlockedAd?: () => void
+  onVideoStreamStatus?: (isStreaming: boolean) => void
+  onBlockedAd?: (count?: number) => void
   renderError?: (errorDomain?: string, errorCode?: number, errorDesc?: string) => React.ReactElement
 }
 
@@ -75,6 +76,7 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
       onLoadEnd,
       onError,
       onMediaDetected,
+      onVideoStreamStatus,
       onBlockedAd,
       renderError,
     },
@@ -99,7 +101,7 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
       webViewRef.current?.injectJavaScript(themeScript)
     }, [effectiveThemeMode, isDark])
 
-    // Stream Sniffer JS: Detects HTML5 video play, src, and HLS/DASH streams
+    // Stream Sniffer JS: Detects HTML5 video play, src, and active video streaming status
     const STREAM_SNIFFER_JS = `
       (function() {
         try {
@@ -121,9 +123,40 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
             }
           }
 
+          function checkVideoPlayback() {
+            var vids = document.querySelectorAll('video');
+            var isPlaying = false;
+            for (var i = 0; i < vids.length; i++) {
+              var v = vids[i];
+              if (v && !v.paused && !v.ended && v.currentTime > 0) {
+                isPlaying = true;
+                break;
+              }
+            }
+            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'VIDEO_STREAM_STATUS',
+                isStreaming: isPlaying
+              }));
+            }
+          }
+
           document.addEventListener('play', function(e) {
             if (e.target && e.target.tagName === 'VIDEO') {
               reportMedia(e.target);
+              checkVideoPlayback();
+            }
+          }, true);
+
+          document.addEventListener('pause', function(e) {
+            if (e.target && e.target.tagName === 'VIDEO') {
+              checkVideoPlayback();
+            }
+          }, true);
+
+          document.addEventListener('ended', function(e) {
+            if (e.target && e.target.tagName === 'VIDEO') {
+              checkVideoPlayback();
             }
           }, true);
 
@@ -180,6 +213,19 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
             posterUrl: data.posterUrl || '',
             quality: 'HD Stream',
           })
+        } else if (data.type === 'STREAM_SNIFFED' && data.sourceUrl) {
+          onMediaDetected?.({
+            id: `sniff-${Date.now()}`,
+            title: data.title || 'Soul Cinema Stream',
+            sourceUrl: data.sourceUrl,
+            posterUrl: '',
+            quality: '1080p Ultra',
+            duration: data.duration ? `${Math.round(data.duration / 60)} min` : undefined,
+          })
+        } else if (data.type === 'VIDEO_STREAM_STATUS') {
+          onVideoStreamStatus?.(Boolean(data.isStreaming))
+        } else if (data.type === 'SHIELDS_ADS_BLOCKED') {
+          onBlockedAd?.(data.count)
         } else if (data.type === 'AD_BLOCKED') {
           onBlockedAd?.()
         }
@@ -231,7 +277,10 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
           mixedContentMode="always"
           javaScriptCanOpenWindowsAutomatically={false}
           setSupportMultipleWindows={false}
-          onLoadStart={onLoadStart}
+          onLoadStart={() => {
+            onVideoStreamStatus?.(false)
+            onLoadStart?.()
+          }}
           onLoadEnd={() => {
             onLoadEnd?.()
             const themeScript = generateWebsiteThemeJS(effectiveThemeMode, isDark)
