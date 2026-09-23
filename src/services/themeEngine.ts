@@ -44,7 +44,7 @@ export function generateWebsiteThemeJS(mode: ThemeMode, systemIsDark: boolean = 
     if (document.documentElement) {
       document.documentElement.style.colorScheme = targetMode;
       document.documentElement.style.filter = "";
-      document.documentElement.style.backgroundColor = isDark ? "#0e1117" : "";
+      document.documentElement.style.backgroundColor = "";
 
       if (isDark) {
         document.documentElement.classList.add("dark");
@@ -63,40 +63,7 @@ export function generateWebsiteThemeJS(mode: ThemeMode, systemIsDark: boolean = 
     if (document.body) {
       document.body.style.colorScheme = targetMode;
       document.body.style.filter = "";
-      document.body.style.backgroundColor = isDark ? "#0e1117" : "";
-    }
-
-    // 3.5 Global smart dark mode stylesheet for websites without built-in dark CSS
-    var GLOBAL_DARK_STYLE_ID = "__streamnest_global_dark_theme";
-    var existingGlobalDark = document.getElementById(GLOBAL_DARK_STYLE_ID);
-    if (isDark) {
-      if (!existingGlobalDark && hostname.indexOf("youtube.com") === -1) {
-        existingGlobalDark = document.createElement("style");
-        existingGlobalDark.id = GLOBAL_DARK_STYLE_ID;
-        existingGlobalDark.type = "text/css";
-        var globalDarkCSS = 
-          "html, body { background-color: #0e1117 !important; color: #e2e8f0 !important; } " +
-          "input:not([type='range']):not([type='checkbox']):not([type='radio']), textarea, select { " +
-          "  background-color: #1a1f2c !important; color: #f8fafc !important; border-color: #334155 !important; " +
-          "} " +
-          "a { color: #60a5fa !important; } " +
-          "img, video, canvas, svg, picture, iframe { filter: none !important; }";
-        existingGlobalDark.appendChild(document.createTextNode(globalDarkCSS));
-        var targetParent = document.head || document.documentElement;
-        if (targetParent) targetParent.appendChild(existingGlobalDark);
-      }
-    } else {
-      // In Light Mode: Immediately remove the global dark stylesheet and clear dark attributes
-      if (existingGlobalDark) {
-        existingGlobalDark.remove();
-      }
-      var darkElements = document.querySelectorAll("[dark], [data-theme='dark']");
-      for (var d = 0; d < darkElements.length; d++) {
-        darkElements[d].removeAttribute("dark");
-        if (darkElements[d].getAttribute("data-theme") === "dark") {
-          darkElements[d].setAttribute("data-theme", "light");
-        }
-      }
+      document.body.style.backgroundColor = "";
     }
 
     // 4. Override window.matchMedia so websites with built-in dark/light themes react naturally
@@ -249,10 +216,6 @@ export function generateWebsiteThemeJS(mode: ThemeMode, systemIsDark: boolean = 
           if (ytmAppLight) ytmAppLight.removeAttribute("dark");
           if (window.ytcfg && typeof window.ytcfg.set === "function") {
             try { window.ytcfg.set("IS_DARK_THEME", false); } catch(e) {}
-          }
-          var ytDarkEls = document.querySelectorAll("[dark], [dark=\x27true\x27]");
-          for (var yi = 0; yi < ytDarkEls.length; yi++) {
-            ytDarkEls[yi].removeAttribute("dark");
           }
         }
       }

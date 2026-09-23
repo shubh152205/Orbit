@@ -147,12 +147,11 @@ function MainStreamNestApp() {
   const isAppDark = webThemeMode === 'auto' ? systemColorScheme === 'dark' : webThemeMode === 'dark'
   const appColors = getThemeColors(isAppDark)
 
-  // Dynamically signal the active webpage and native Chromium engine whenever theme mode changes in real-time
+  // Dynamically signal the active webpage whenever theme mode changes in real-time
   useEffect(() => {
     const isDark = webThemeMode === 'auto' ? systemColorScheme === 'dark' : webThemeMode === 'dark'
     const themeScript = generateWebsiteThemeJS(webThemeMode, isDark)
     browserRef.current?.injectJavaScript(themeScript)
-    backgroundAudio.updateTheme(isDark).catch(() => {})
   }, [webThemeMode, systemColorScheme])
 
   // Brave Shields & Soul Clean Mode State
@@ -207,13 +206,32 @@ function MainStreamNestApp() {
         const inPip = Boolean(event.isInPictureInPictureMode)
         setIsPipActive(inPip)
         if (inPip) {
-          browserRef.current?.injectJavaScript(
-            "var s = document.getElementById('__streamnest_island_spacer'); if (s) s.style.display = 'none'; true;"
-          )
+          browserRef.current?.injectJavaScript(`
+            (function() {
+              var s = document.getElementById('__streamnest_island_spacer');
+              if (s) s.style.display = 'none';
+              var v = document.querySelector('video');
+              if (!v) return;
+              var style = document.getElementById('__streamnest_pip_style');
+              if (!style) {
+                style = document.createElement('style');
+                style.id = '__streamnest_pip_style';
+                (document.head || document.documentElement).appendChild(style);
+              }
+              style.textContent = 'html, body { overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; } video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; z-index: 2147483647 !important; object-fit: contain !important; background: #000 !important; } #player, .html5-video-player, ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer, .watch-below-the-player { background: #000 !important; }';
+            })();
+            true;
+          `)
         } else {
-          browserRef.current?.injectJavaScript(
-            "var s = document.getElementById('__streamnest_island_spacer'); if (s) s.style.display = 'block'; true;"
-          )
+          browserRef.current?.injectJavaScript(`
+            (function() {
+              var s = document.getElementById('__streamnest_island_spacer');
+              if (s) s.style.display = 'block';
+              var style = document.getElementById('__streamnest_pip_style');
+              if (style) style.remove();
+            })();
+            true;
+          `)
         }
       }
     )
@@ -564,28 +582,48 @@ function MainStreamNestApp() {
   const isAnyVideoPlaying = (isCinemaMode && isCinemaPlaying) || (!isCinemaMode && isVideoPlayingOnPage)
 
   // Synchronize Android Native System PiP capability:
-  // Auto-enter PiP on swipe-home is strictly locked unless a video is actively playing.
+  // Auto-enter PiP on swipe-home is strictly limited to Cinema Mode fullscreen playback,
+  // preventing accidental PiP conversions when browsing web pages or when media is paused.
   useEffect(() => {
-    setSystemPipVideoPlaybackState(isAnyVideoPlaying, autoPipEnabled).catch(() => {})
-  }, [isAnyVideoPlaying, autoPipEnabled])
+    const shouldAutoPip = isCinemaMode && isCinemaPlaying && autoPipEnabled
+    setSystemPipVideoPlaybackState(shouldAutoPip, autoPipEnabled).catch(() => {})
+  }, [isCinemaMode, isCinemaPlaying, autoPipEnabled])
 
   const handleTogglePip = async (posMillis?: number) => {
-    if (!isAnyVideoPlaying && !sniffedStream && !isCinemaMode) {
-      Alert.alert(
-        'No Active Video Stream',
-        'Picture-in-Picture mode activates when a video is actively playing on the page or in cinema mode.'
-      )
-      return
-    }
     if (typeof posMillis === 'number') {
       setVideoPlaybackPositionMillis(posMillis)
     }
     if (sniffedStream) {
       setActiveVideo(sniffedStream)
       setSniffedStream(null)
+      setAutoStartPip(true)
+      setIsCinemaMode(true)
+      setActiveTab('cinema')
+      return
     }
+
+    if (!isCinemaMode) {
+      // Isolate the web video in the WebView so it fills 100% of the PiP window cleanly
+      browserRef.current?.injectJavaScript(`
+        (function() {
+          var v = document.querySelector('video');
+          if (!v) return;
+          var style = document.getElementById('__streamnest_pip_style');
+          if (!style) {
+            style = document.createElement('style');
+            style.id = '__streamnest_pip_style';
+            (document.head || document.documentElement).appendChild(style);
+          }
+          style.textContent = 'html, body { overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; } video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; z-index: 2147483647 !important; object-fit: contain !important; background: #000 !important; } #player, .html5-video-player, ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer, .watch-below-the-player { background: #000 !important; }';
+        })();
+        true;
+      `)
+    }
+
+    setIsPipActive(true)
     const entered = await enterSystemPictureInPicture()
     if (!entered) {
+      setIsPipActive(false)
       if (!isCinemaMode) {
         setAutoStartPip(true)
         setIsCinemaMode(true)

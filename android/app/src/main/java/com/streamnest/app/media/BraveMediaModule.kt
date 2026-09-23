@@ -58,14 +58,4 @@ class BraveMediaModule(private val reactContext: ReactApplicationContext) :
             promise.resolve(false)
         }
     }
-
-    @ReactMethod
-    fun updateTheme(isDark: Boolean, promise: Promise) {
-        try {
-            BraveWebView.activeWebView?.get()?.updateTheme(isDark)
-            promise.resolve(true)
-        } catch (e: Exception) {
-            promise.resolve(false)
-        }
-    }
 }

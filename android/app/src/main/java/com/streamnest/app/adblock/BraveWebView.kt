@@ -36,35 +36,6 @@ class BraveWebView(context: ThemedReactContext) : RNCWebView(context) {
         activeWebView = WeakReference(this)
     }
 
-    /**
-     * Applies native Chromium algorithmic darkening to all web content.
-     * Android 13+ (API 33+) requires isAlgorithmicDarkeningAllowed.
-     */
-    fun updateTheme(isDark: Boolean) {
-        post {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    settings.isAlgorithmicDarkeningAllowed = isDark
-                } else if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-                    WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, isDark)
-                }
-
-                if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-                    val forceDarkMode = if (isDark) WebSettingsCompat.FORCE_DARK_ON else WebSettingsCompat.FORCE_DARK_OFF
-                    WebSettingsCompat.setForceDark(settings, forceDarkMode)
-                }
-
-                if (isDark && WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
-                    WebSettingsCompat.setForceDarkStrategy(
-                        settings,
-                        WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
-                    )
-                }
-            } catch (e: Exception) {
-                // Ignore if settings unavailable
-            }
-        }
-    }
 
     override fun getWindowVisibility(): Int {
         if (isBackgroundPlayEnabled) {

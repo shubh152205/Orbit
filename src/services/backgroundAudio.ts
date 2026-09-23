@@ -68,14 +68,6 @@ class BackgroundAudioService {
       } catch (e) {}
     }
   }
-
-  async updateTheme(isDark: boolean): Promise<void> {
-    if (Platform.OS === 'android' && BraveMediaModule?.updateTheme) {
-      try {
-        await BraveMediaModule.updateTheme(isDark)
-      } catch (e) {}
-    }
-  }
 }
 
 export const backgroundAudio = BackgroundAudioService.getInstance()
