@@ -467,27 +467,6 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
       Object.defineProperty(window, 'onpagehide', { get: function() { return null; }, set: function() {}, configurable: true });
       Object.defineProperty(document, 'onvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
       Object.defineProperty(document, 'onwebkitvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
-    } catch(e) {}
-
-    // Track user touch interactions to distinguish user pauses from OS background pauses
-    var lastUserGestureTimestamp = Date.now();
-    ['click', 'touchstart', 'touchend', 'mousedown', 'keydown', 'pointerdown'].forEach(function(evt) {
-      window.addEventListener(evt, function() {
-        lastUserGestureTimestamp = Date.now();
-      }, { capture: true, passive: true });
-    });
-
-    // Intercept auto-pauses triggered by OS app minimization/blur
-    var origMediaPause = HTMLMediaElement.prototype.pause;
-    HTMLMediaElement.prototype.pause = function() {
-      var timeSinceGesture = Date.now() - lastUserGestureTimestamp;
-      if (timeSinceGesture > 800 && !this.ended && this.currentTime > 0) {
-        // Prevent background pause
-        return Promise.resolve();
-      }
-      return origMediaPause.apply(this, arguments);
-    };
-
     // Reinforce playsinline attributes on HTML5 media elements
     function keepMediaActive() {
       var medias = document.querySelectorAll('video, audio');
@@ -548,7 +527,7 @@ export const BACKGROUND_PLAY_EARLY_JS = `
     def(document, 'webkitHidden', false);
     def(document, 'webkitVisibilityState', 'visible');
 
-    // 2. Drop auto-pause event listeners
+    // 2. Drop auto-pause event listeners so web players don't pause on minimize/lock
     var blockedList = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'focusout', 'pagehide'];
     var originalAddEventListener = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function(type, listener, options) {
@@ -566,24 +545,6 @@ export const BACKGROUND_PLAY_EARLY_JS = `
       Object.defineProperty(document, 'onvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
       Object.defineProperty(document, 'onwebkitvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
     } catch(e) {}
-
-    // 3. User interaction tracker
-    var lastInteraction = Date.now();
-    ['click', 'touchstart', 'touchend', 'mousedown', 'keydown', 'pointerdown'].forEach(function(evt) {
-      window.addEventListener(evt, function() {
-        lastInteraction = Date.now();
-      }, { capture: true, passive: true });
-    });
-
-    // 4. Intercept programmatic pause caused by window blur or screen off
-    var origHTMLMediaPause = HTMLMediaElement.prototype.pause;
-    HTMLMediaElement.prototype.pause = function() {
-      var diff = Date.now() - lastInteraction;
-      if (diff > 800 && !this.ended && this.currentTime > 0) {
-        return Promise.resolve();
-      }
-      return origHTMLMediaPause.apply(this, arguments);
-    };
   } catch (err) {}
 })();
 true;

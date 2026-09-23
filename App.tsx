@@ -12,6 +12,7 @@ import {
   PermissionsAndroid,
   Alert,
   useColorScheme,
+  DeviceEventEmitter,
 } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -146,11 +147,12 @@ function MainStreamNestApp() {
   const isAppDark = webThemeMode === 'auto' ? systemColorScheme === 'dark' : webThemeMode === 'dark'
   const appColors = getThemeColors(isAppDark)
 
-  // Dynamically signal the active webpage whenever theme mode changes in real-time
+  // Dynamically signal the active webpage and native Chromium engine whenever theme mode changes in real-time
   useEffect(() => {
     const isDark = webThemeMode === 'auto' ? systemColorScheme === 'dark' : webThemeMode === 'dark'
     const themeScript = generateWebsiteThemeJS(webThemeMode, isDark)
     browserRef.current?.injectJavaScript(themeScript)
+    backgroundAudio.updateTheme(isDark).catch(() => {})
   }, [webThemeMode, systemColorScheme])
 
   // Brave Shields & Soul Clean Mode State
@@ -196,6 +198,82 @@ function MainStreamNestApp() {
   const [isPipActive, setIsPipActive] = useState(false)
   const [autoStartPip, setAutoStartPip] = useState(false)
   const [videoPlaybackPositionMillis, setVideoPlaybackPositionMillis] = useState(0)
+
+  // Listen for native Android Picture-in-Picture mode transitions
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(
+      'onPictureInPictureModeChanged',
+      (event: { isInPictureInPictureMode: boolean }) => {
+        const inPip = Boolean(event.isInPictureInPictureMode)
+        setIsPipActive(inPip)
+        if (inPip) {
+          browserRef.current?.injectJavaScript(
+            "var s = document.getElementById('__streamnest_island_spacer'); if (s) s.style.display = 'none'; true;"
+          )
+        } else {
+          browserRef.current?.injectJavaScript(
+            "var s = document.getElementById('__streamnest_island_spacer'); if (s) s.style.display = 'block'; true;"
+          )
+        }
+      }
+    )
+    return () => sub.remove()
+  }, [])
+
+  // Listen for interactive Android notification player controls
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(
+      'onNotificationMediaAction',
+      (action: string) => {
+        if (action === 'play') {
+          if (isCinemaMode) {
+            setIsCinemaPlaying(true)
+          } else {
+            browserRef.current?.injectJavaScript(`
+              (function() {
+                var v = document.querySelector('video');
+                if (v) v.play();
+                var btn = document.querySelector('.ytp-play-button');
+                if (btn && btn.getAttribute('data-title-no-tooltip') === 'Play') btn.click();
+              })();
+              true;
+            `)
+          }
+        } else if (action === 'pause') {
+          if (isCinemaMode) {
+            setIsCinemaPlaying(false)
+          } else {
+            browserRef.current?.injectJavaScript(`
+              (function() {
+                var v = document.querySelector('video');
+                if (v) v.pause();
+                var btn = document.querySelector('.ytp-play-button');
+                if (btn && btn.getAttribute('data-title-no-tooltip') === 'Pause') btn.click();
+              })();
+              true;
+            `)
+          }
+        } else if (action === 'forward') {
+          browserRef.current?.injectJavaScript(`
+            (function() {
+              var v = document.querySelector('video');
+              if (v) v.currentTime += 10;
+            })();
+            true;
+          `)
+        } else if (action === 'backward') {
+          browserRef.current?.injectJavaScript(`
+            (function() {
+              var v = document.querySelector('video');
+              if (v) v.currentTime = Math.max(0, v.currentTime - 10);
+            })();
+            true;
+          `)
+        }
+      }
+    )
+    return () => sub.remove()
+  }, [isCinemaMode])
 
   // Streaming Engine Settings: Background Play (Soul/Brave mode) & Screen Off Display Saver
   const [backgroundPlayEnabled, setBackgroundPlayEnabled] = useState(true)
@@ -531,11 +609,14 @@ function MainStreamNestApp() {
   // Starts native Foreground Service with WakeLock when video is actively playing.
   // Keeps CPU awake and Chromium audio decoder active when screen is turned off or app backgrounded.
   useEffect(() => {
+    const subtitle = currentUrl.replace(/^https?:\/\//, '').split('/')[0]
     if (backgroundPlayEnabled && isAnyVideoPlaying) {
       const title = isCinemaMode ? activeVideo.title : (pageTitle || 'Web Video Stream')
-      backgroundAudio.startKeepAlive(title, currentUrl)
-    } else {
-      backgroundAudio.stopKeepAlive()
+      backgroundAudio.startKeepAlive(title, subtitle)
+      backgroundAudio.updatePlaybackState(true, title, subtitle)
+    } else if (!isAnyVideoPlaying) {
+      const title = isCinemaMode ? activeVideo.title : (pageTitle || 'Web Video Stream')
+      backgroundAudio.updatePlaybackState(false, title, subtitle)
     }
   }, [backgroundPlayEnabled, isAnyVideoPlaying, isCinemaMode, activeVideo.title, pageTitle, currentUrl])
 
@@ -560,7 +641,7 @@ function MainStreamNestApp() {
         isVideoStreaming={isVideoStreaming}
         isCinemaMode={isCinemaMode}
         isDesktopMode={isDesktopMode}
-        isHidden={isCleanMode}
+        isHidden={isCleanMode || isPipActive}
         onToggleHide={() => setIsCleanMode(!isCleanMode)}
         onNavigate={handleNavigate}
         onBack={() => browserRef.current?.goBack()}
@@ -576,7 +657,7 @@ function MainStreamNestApp() {
       />
 
       {/* Live Sniffed Video Quick Action Banner */}
-      {sniffedStream && !isCleanMode && (
+      {sniffedStream && !isCleanMode && !isPipActive && (
         <View style={[styles.sniffedBannerWrapper, { top: sniffedBannerTop }]}>
           <LiquidGlassContainer type="rounded" variant="card" style={styles.sniffedBannerCard}>
             <View style={styles.sniffedBannerInner}>
@@ -671,8 +752,8 @@ function MainStreamNestApp() {
             style={[
               styles.tabContent,
               {
-                paddingTop: insets.top,
-                paddingBottom: insets.bottom,
+                paddingTop: isPipActive ? 0 : insets.top,
+                paddingBottom: isPipActive ? 0 : insets.bottom,
                 backgroundColor: appColors.canvas,
               },
             ]}
@@ -701,8 +782,16 @@ function MainStreamNestApp() {
                   setBlockedAdsCount((prev) => prev + 1)
                 }
               }}
-              onVideoStreamStatus={(isStreaming) => {
+              onVideoStreamStatus={(isStreaming, mediaInfo) => {
                 setIsVideoPlayingOnPage(Boolean(isStreaming))
+                if (mediaInfo?.title) {
+                  setPageTitle(mediaInfo.title)
+                }
+                if (backgroundPlayEnabled) {
+                  const title = isCinemaMode ? activeVideo.title : (mediaInfo?.title || pageTitle || 'Web Video Stream')
+                  const subtitle = currentUrl.replace(/^https?:\/\//, '').split('/')[0]
+                  backgroundAudio.updatePlaybackState(Boolean(isStreaming), title, subtitle).catch(() => {})
+                }
               }}
               onMediaDetected={(media) => {
                 if (!dismissedStreamUrlsRef.current.has(media.sourceUrl)) {

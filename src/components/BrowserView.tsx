@@ -36,7 +36,10 @@ export interface BrowserViewProps {
   onLoadEnd?: () => void
   onError?: (error: any) => void
   onMediaDetected?: (media: VideoStreamItem) => void
-  onVideoStreamStatus?: (isStreaming: boolean) => void
+  onVideoStreamStatus?: (
+    isStreaming: boolean,
+    mediaInfo?: { title?: string; duration?: number; currentTime?: number }
+  ) => void
   onBlockedAd?: (count?: number) => void
   renderError?: (errorDomain?: string, errorCode?: number, errorDesc?: string) => React.ReactElement
 }
@@ -126,17 +129,22 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
           function checkVideoPlayback() {
             var vids = document.querySelectorAll('video');
             var isPlaying = false;
+            var activeVid = null;
             for (var i = 0; i < vids.length; i++) {
               var v = vids[i];
               if (v && !v.paused && !v.ended && v.currentTime > 0 && v.readyState >= 2) {
                 isPlaying = true;
+                activeVid = v;
                 break;
               }
             }
             if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'VIDEO_STREAM_STATUS',
-                isStreaming: isPlaying
+                isStreaming: isPlaying,
+                title: document.title || 'Web Video Stream',
+                duration: activeVid ? (activeVid.duration || 0) : 0,
+                currentTime: activeVid ? (activeVid.currentTime || 0) : 0
               }));
             }
           }
@@ -169,10 +177,14 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
           document.addEventListener('loadeddata', function(e) {
             if (e.target && e.target.tagName === 'VIDEO') {
               reportMedia(e.target);
+              checkVideoPlayback();
             }
           }, true);
 
-          setInterval(checkVideoPlayback, 2000);
+          document.addEventListener('emptied', checkVideoPlayback, true);
+          document.addEventListener('abort', checkVideoPlayback, true);
+
+          setInterval(checkVideoPlayback, 1500);
         } catch(e) {}
       })();
       true;
@@ -231,7 +243,11 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
             duration: data.duration ? `${Math.round(data.duration / 60)} min` : undefined,
           })
         } else if (data.type === 'VIDEO_STREAM_STATUS') {
-          onVideoStreamStatus?.(Boolean(data.isStreaming))
+          onVideoStreamStatus?.(Boolean(data.isStreaming), {
+            title: data.title,
+            duration: data.duration,
+            currentTime: data.currentTime,
+          })
         } else if (data.type === 'SHIELDS_ADS_BLOCKED') {
           onBlockedAd?.(data.count)
         } else if (data.type === 'AD_BLOCKED') {

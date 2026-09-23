@@ -50,11 +50,20 @@ class BraveMediaModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun isAudioActive(promise: Promise) {
+    fun updatePlaybackState(isPlaying: Boolean, title: String?, subtitle: String?, promise: Promise) {
         try {
-            val audioManager = reactContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            val isActive = audioManager?.isMusicActive == true
-            promise.resolve(isActive)
+            BraveMediaPlaybackService.updateState(reactContext, isPlaying, title, subtitle)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    @ReactMethod
+    fun updateTheme(isDark: Boolean, promise: Promise) {
+        try {
+            BraveWebView.activeWebView?.get()?.updateTheme(isDark)
+            promise.resolve(true)
         } catch (e: Exception) {
             promise.resolve(false)
         }

@@ -1,6 +1,7 @@
 package com.streamnest.app.adblock
 
 import com.facebook.react.uimanager.ThemedReactContext
+import com.facebook.react.uimanager.annotations.ReactProp
 import com.reactnativecommunity.webview.RNCWebViewManager
 import com.reactnativecommunity.webview.RNCWebViewWrapper
 
@@ -21,5 +22,12 @@ class BraveShieldsWebViewManager : RNCWebViewManager() {
         // Install BraveShieldsWebViewClient on the underlying WebView
         val webView = viewWrapper.webView
         webView.webViewClient = BraveShieldsWebViewClient(reactContext)
+    }
+
+    @ReactProp(name = "forceDarkOn")
+    override fun setForceDarkOn(viewWrapper: RNCWebViewWrapper, enabled: Boolean) {
+        super.setForceDarkOn(viewWrapper, enabled)
+        val webView = viewWrapper.webView as? BraveWebView
+        webView?.updateTheme(enabled)
     }
 }

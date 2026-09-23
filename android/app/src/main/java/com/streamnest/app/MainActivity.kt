@@ -79,6 +79,19 @@ class MainActivity : ReactActivity() {
     newConfig: Configuration
   ) {
     super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+    try {
+      val reactContext = reactInstanceManager?.currentReactContext
+      if (reactContext != null) {
+        val params = com.facebook.react.bridge.Arguments.createMap().apply {
+          putBoolean("isInPictureInPictureMode", isInPictureInPictureMode)
+        }
+        reactContext
+          .getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+          .emit("onPictureInPictureModeChanged", params)
+      }
+    } catch (e: Exception) {
+      // Ignore
+    }
   }
 
   /**

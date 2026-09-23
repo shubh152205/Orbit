@@ -56,6 +56,26 @@ class BackgroundAudioService {
       } catch (e) {}
     }
   }
+
+  async updatePlaybackState(
+    isPlaying: boolean,
+    title?: string,
+    subtitle?: string
+  ): Promise<void> {
+    if (Platform.OS === 'android' && BraveMediaModule?.updatePlaybackState) {
+      try {
+        await BraveMediaModule.updatePlaybackState(isPlaying, title, subtitle)
+      } catch (e) {}
+    }
+  }
+
+  async updateTheme(isDark: boolean): Promise<void> {
+    if (Platform.OS === 'android' && BraveMediaModule?.updateTheme) {
+      try {
+        await BraveMediaModule.updateTheme(isDark)
+      } catch (e) {}
+    }
+  }
 }
 
 export const backgroundAudio = BackgroundAudioService.getInstance()
