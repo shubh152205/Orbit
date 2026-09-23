@@ -19,6 +19,7 @@ import expo.modules.ReactNativeHostWrapper
 import com.streamnest.app.adblock.BraveNativeEngine
 import com.streamnest.app.adblock.BraveShieldsPackage
 import com.streamnest.app.pip.PipPackage
+import com.streamnest.app.media.BraveMediaPackage
 import com.reactnativecommunity.webview.RNCWebViewPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -32,6 +33,7 @@ class MainApplication : Application(), ReactApplication {
             }.toMutableList()
             packages.add(BraveShieldsPackage())
             packages.add(PipPackage())
+            packages.add(BraveMediaPackage())
             return packages
           }
 

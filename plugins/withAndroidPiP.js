@@ -25,6 +25,22 @@ function withAndroidPiP(config) {
         mainActivity.$['android:configChanges'] =
           'keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode';
       }
+
+      if (!mainApplication.service) {
+        mainApplication.service = [];
+      }
+      const existingService = mainApplication.service.find(
+        (s) => s.$ && s.$['android:name'] === '.media.BraveMediaPlaybackService'
+      );
+      if (!existingService) {
+        mainApplication.service.push({
+          $: {
+            'android:name': '.media.BraveMediaPlaybackService',
+            'android:foregroundServiceType': 'mediaPlayback',
+            'android:exported': 'false',
+          },
+        });
+      }
     }
 
     // Add necessary media & background permissions
@@ -72,7 +88,7 @@ function withAndroidPiP(config) {
     var isVideoPlaying: Boolean = false
 
     @Volatile
-    var isAutoPipEnabled: Boolean = true
+    var isAutoPipEnabled: Boolean = false
 
     fun updatePipState(activity: MainActivity?, isPlaying: Boolean, autoPipEnabled: Boolean) {
       isVideoPlaying = isPlaying

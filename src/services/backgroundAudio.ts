@@ -1,10 +1,9 @@
-import { Audio } from 'expo-av'
-import { Platform } from 'react-native'
+import { NativeModules, Platform } from 'react-native'
+
+const { BraveMediaModule } = NativeModules
 
 class BackgroundAudioService {
   private static instance: BackgroundAudioService
-  private sound: Audio.Sound | null = null
-  private isInitialized = false
   private isKeepAliveActive = false
 
   private constructor() {}
@@ -16,67 +15,45 @@ class BackgroundAudioService {
     return BackgroundAudioService.instance
   }
 
-  async setupAudioMode(): Promise<void> {
-    if (this.isInitialized) return
-    try {
-      await Audio.setAudioModeAsync({
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: false,
-        playThroughEarpieceAndroid: false,
-        interruptionModeAndroid: 1, // INTERRUPTION_MODE_ANDROID_DO_NOT_MIX
-        interruptionModeIOS: 1, // INTERRUPTION_MODE_IOS_MIX_WITH_OTHERS
-      })
-      this.isInitialized = true
-    } catch (e) {
-      console.warn('Failed to setup Audio mode for background playback:', e)
-    }
-  }
-
   /**
-   * Starts an inaudible background audio keepalive track.
-   * This signals to the OS (Android MediaSession and iOS AVAudioSession)
-   * that the app is actively playing audio, preventing the operating system
-   * from killing or freezing WebView media playback when the user minimizes
-   * the app, switches to other apps, or locks the device.
+   * Starts native Brave background media playback service.
+   * Acquires a PARTIAL_WAKE_LOCK and starts a Foreground Service with mediaPlayback type,
+   * keeping the CPU awake and Chromium's audio decoder alive when screen is off or app is backgrounded.
    */
-  async startKeepAlive(): Promise<void> {
+  async startKeepAlive(
+    title: string = 'StreamNest Media Playback',
+    subtitle: string = 'Streaming in background'
+  ): Promise<void> {
     if (this.isKeepAliveActive) return
     this.isKeepAliveActive = true
 
-    try {
-      await this.setupAudioMode()
-
-      if (!this.sound) {
-        // Base64 silent WAV header + PCM 0 data (1 second loop)
-        const silentWavBase64 =
-          'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAP//'
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: silentWavBase64 },
-          {
-            isLooping: true,
-            volume: 0.01,
-            shouldPlay: true,
-          }
-        )
-        this.sound = sound
-      } else {
-        await this.sound.playAsync()
+    if (Platform.OS === 'android' && BraveMediaModule) {
+      try {
+        await BraveMediaModule.startBackgroundPlayback(title, subtitle)
+      } catch (err) {
+        console.warn('Failed to start Brave native background media service:', err)
       }
-    } catch (err) {
-      console.warn('Background audio keepalive notice:', err)
     }
   }
 
   async stopKeepAlive(): Promise<void> {
     if (!this.isKeepAliveActive) return
     this.isKeepAliveActive = false
-    try {
-      if (this.sound) {
-        await this.sound.stopAsync()
+
+    if (Platform.OS === 'android' && BraveMediaModule) {
+      try {
+        await BraveMediaModule.stopBackgroundPlayback()
+      } catch (e) {
+        console.warn('Failed to stop Brave native background media service:', e)
       }
-    } catch (e) {
-      console.warn('Failed to stop audio keepalive:', e)
+    }
+  }
+
+  async setBackgroundPlayEnabled(enabled: boolean): Promise<void> {
+    if (Platform.OS === 'android' && BraveMediaModule) {
+      try {
+        await BraveMediaModule.setBackgroundPlayEnabled(enabled)
+      } catch (e) {}
     }
   }
 }

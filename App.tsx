@@ -200,6 +200,11 @@ function MainStreamNestApp() {
   // Streaming Engine Settings: Background Play (Soul/Brave mode) & Screen Off Display Saver
   const [backgroundPlayEnabled, setBackgroundPlayEnabled] = useState(true)
   const [autoPipEnabled, setAutoPipEnabled] = useState(true)
+
+  useEffect(() => {
+    backgroundAudio.setBackgroundPlayEnabled(backgroundPlayEnabled).catch(() => {})
+  }, [backgroundPlayEnabled])
+
   const [isScreenOff, setIsScreenOff] = useState(false)
   const screenOffHintOpacity = useRef(new Animated.Value(1)).current
   const screenOffTimerRef = useRef<any>(null)
@@ -522,14 +527,17 @@ function MainStreamNestApp() {
 
   const isVideoStreaming = isPipActive || isCinemaMode || !!sniffedStream || isVideoPlayingOnPage
 
-  // Background Audio Keep-Alive: ensures native OS media session never suspends WebView or player in background
+  // Brave Background Media Service:
+  // Starts native Foreground Service with WakeLock when video is actively playing.
+  // Keeps CPU awake and Chromium audio decoder active when screen is turned off or app backgrounded.
   useEffect(() => {
-    if (isVideoStreaming) {
-      backgroundAudio.startKeepAlive()
+    if (backgroundPlayEnabled && isAnyVideoPlaying) {
+      const title = isCinemaMode ? activeVideo.title : (pageTitle || 'Web Video Stream')
+      backgroundAudio.startKeepAlive(title, currentUrl)
     } else {
       backgroundAudio.stopKeepAlive()
     }
-  }, [isVideoStreaming])
+  }, [backgroundPlayEnabled, isAnyVideoPlaying, isCinemaMode, activeVideo.title, pageTitle, currentUrl])
 
   return (
     <View style={[styles.rootContainer, { backgroundColor: appColors.canvas }]}>
@@ -694,10 +702,9 @@ function MainStreamNestApp() {
                 }
               }}
               onVideoStreamStatus={(isStreaming) => {
-                setIsVideoPlayingOnPage(isStreaming)
+                setIsVideoPlayingOnPage(Boolean(isStreaming))
               }}
               onMediaDetected={(media) => {
-                setIsVideoPlayingOnPage(true)
                 if (!dismissedStreamUrlsRef.current.has(media.sourceUrl)) {
                   setSniffedStream(media)
                 }

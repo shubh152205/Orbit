@@ -429,30 +429,49 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
 
   // 6. SOUL & BRAVE BACKGROUND PLAY ENGINE (Continuous Audio/Video in Background)
   try {
-    // Override Page Visibility API so websites never think they are hidden or backgrounded
-    Object.defineProperty(document, 'hidden', { get: function() { return false; }, configurable: true });
-    Object.defineProperty(document, 'visibilityState', { get: function() { return 'visible'; }, configurable: true });
-    Object.defineProperty(document, 'webkitHidden', { get: function() { return false; }, configurable: true });
-    Object.defineProperty(document, 'webkitVisibilityState', { get: function() { return 'visible'; }, configurable: true });
+    var defProp = function(target, prop, val) {
+      try {
+        Object.defineProperty(target, prop, {
+          get: function() { return val; },
+          set: function() {},
+          configurable: true,
+          enumerable: true
+        });
+      } catch(e) {}
+    };
+
+    defProp(Document.prototype, 'hidden', false);
+    defProp(Document.prototype, 'visibilityState', 'visible');
+    defProp(Document.prototype, 'webkitHidden', false);
+    defProp(Document.prototype, 'webkitVisibilityState', 'visible');
+
+    defProp(document, 'hidden', false);
+    defProp(document, 'visibilityState', 'visible');
+    defProp(document, 'webkitHidden', false);
+    defProp(document, 'webkitVisibilityState', 'visible');
 
     // Drop auto-pause event listeners so web players don't pause on minimize/lock
-    var blockedEventNames = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'pagehide'];
+    var blockedEventNames = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'focusout', 'pagehide'];
     var origAEL = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function(type, listener, options) {
       if (typeof type === 'string' && blockedEventNames.indexOf(type.toLowerCase()) !== -1) {
-        return; // Drop listener to prevent auto-pause on app minimize
+        if (this === window || this === document) {
+          return;
+        }
       }
       return origAEL.call(this, type, listener, options);
     };
 
-    window.onblur = null;
-    window.onpagehide = null;
-    document.onvisibilitychange = null;
-    document.onwebkitvisibilitychange = null;
+    try {
+      Object.defineProperty(window, 'onblur', { get: function() { return null; }, set: function() {}, configurable: true });
+      Object.defineProperty(window, 'onpagehide', { get: function() { return null; }, set: function() {}, configurable: true });
+      Object.defineProperty(document, 'onvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
+      Object.defineProperty(document, 'onwebkitvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
+    } catch(e) {}
 
     // Track user touch interactions to distinguish user pauses from OS background pauses
     var lastUserGestureTimestamp = Date.now();
-    ['click', 'touchstart', 'touchend', 'mousedown', 'keydown'].forEach(function(evt) {
+    ['click', 'touchstart', 'touchend', 'mousedown', 'keydown', 'pointerdown'].forEach(function(evt) {
       window.addEventListener(evt, function() {
         lastUserGestureTimestamp = Date.now();
       }, { capture: true, passive: true });
@@ -462,7 +481,7 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
     var origMediaPause = HTMLMediaElement.prototype.pause;
     HTMLMediaElement.prototype.pause = function() {
       var timeSinceGesture = Date.now() - lastUserGestureTimestamp;
-      if (timeSinceGesture > 1200 && !this.ended && this.currentTime > 0) {
+      if (timeSinceGesture > 800 && !this.ended && this.currentTime > 0) {
         // Prevent background pause
         return Promise.resolve();
       }
@@ -507,40 +526,60 @@ true;
 export const BACKGROUND_PLAY_EARLY_JS = `
 (function() {
   try {
-    // 1. Spoof Page Visibility API before any website script executes
-    Object.defineProperty(document, 'hidden', { get: function() { return false; }, configurable: true });
-    Object.defineProperty(document, 'visibilityState', { get: function() { return 'visible'; }, configurable: true });
-    Object.defineProperty(document, 'webkitHidden', { get: function() { return false; }, configurable: true });
-    Object.defineProperty(document, 'webkitVisibilityState', { get: function() { return 'visible'; }, configurable: true });
+    var def = function(target, prop, val) {
+      try {
+        Object.defineProperty(target, prop, {
+          get: function() { return val; },
+          set: function() {},
+          configurable: true,
+          enumerable: true
+        });
+      } catch(e) {}
+    };
+
+    // 1. Spoof Page Visibility API across Document prototype and document instance
+    def(Document.prototype, 'hidden', false);
+    def(Document.prototype, 'visibilityState', 'visible');
+    def(Document.prototype, 'webkitHidden', false);
+    def(Document.prototype, 'webkitVisibilityState', 'visible');
+
+    def(document, 'hidden', false);
+    def(document, 'visibilityState', 'visible');
+    def(document, 'webkitHidden', false);
+    def(document, 'webkitVisibilityState', 'visible');
 
     // 2. Drop auto-pause event listeners
-    var blockedList = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'pagehide'];
+    var blockedList = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'focusout', 'pagehide'];
     var originalAddEventListener = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function(type, listener, options) {
       if (typeof type === 'string' && blockedList.indexOf(type.toLowerCase()) !== -1) {
-        return;
+        if (this === window || this === document) {
+          return;
+        }
       }
       return originalAddEventListener.call(this, type, listener, options);
     };
 
-    window.onblur = null;
-    window.onpagehide = null;
-    document.onvisibilitychange = null;
-    document.onwebkitvisibilitychange = null;
+    try {
+      Object.defineProperty(window, 'onblur', { get: function() { return null; }, set: function() {}, configurable: true });
+      Object.defineProperty(window, 'onpagehide', { get: function() { return null; }, set: function() {}, configurable: true });
+      Object.defineProperty(document, 'onvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
+      Object.defineProperty(document, 'onwebkitvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
+    } catch(e) {}
 
     // 3. User interaction tracker
     var lastInteraction = Date.now();
-    ['click', 'touchstart', 'touchend', 'mousedown', 'keydown'].forEach(function(evt) {
+    ['click', 'touchstart', 'touchend', 'mousedown', 'keydown', 'pointerdown'].forEach(function(evt) {
       window.addEventListener(evt, function() {
         lastInteraction = Date.now();
       }, { capture: true, passive: true });
     });
 
-    // 4. Intercept programmatic pause caused by window blur
+    // 4. Intercept programmatic pause caused by window blur or screen off
     var origHTMLMediaPause = HTMLMediaElement.prototype.pause;
     HTMLMediaElement.prototype.pause = function() {
       var diff = Date.now() - lastInteraction;
-      if (diff > 1200 && !this.ended && this.currentTime > 0) {
+      if (diff > 800 && !this.ended && this.currentTime > 0) {
         return Promise.resolve();
       }
       return origHTMLMediaPause.apply(this, arguments);

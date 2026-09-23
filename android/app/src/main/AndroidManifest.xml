@@ -34,5 +34,9 @@
         <data android:scheme="com.streamnest.app"/>
       </intent-filter>
     </activity>
+    <service
+      android:name=".media.BraveMediaPlaybackService"
+      android:foregroundServiceType="mediaPlayback"
+      android:exported="false" />
   </application>
 </manifest>

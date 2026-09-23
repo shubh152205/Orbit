@@ -5,9 +5,15 @@ import com.reactnativecommunity.webview.RNCWebViewManager
 import com.reactnativecommunity.webview.RNCWebViewWrapper
 
 /**
- * Custom RNCWebViewManager injecting BraveShieldsWebViewClient with native JNI ad-blocking
+ * Custom RNCWebViewManager injecting BraveWebView and BraveShieldsWebViewClient
+ * with native JNI ad-blocking and continuous background media streaming.
  */
 class BraveShieldsWebViewManager : RNCWebViewManager() {
+
+    override fun createViewInstance(context: ThemedReactContext): RNCWebViewWrapper {
+        val webView = BraveWebView(context)
+        return createViewInstance(context, webView)
+    }
 
     override fun addEventEmitters(reactContext: ThemedReactContext, viewWrapper: RNCWebViewWrapper) {
         super.addEventEmitters(reactContext, viewWrapper)

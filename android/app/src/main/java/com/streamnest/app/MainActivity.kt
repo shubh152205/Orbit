@@ -20,7 +20,7 @@ class MainActivity : ReactActivity() {
     var isVideoPlaying: Boolean = false
 
     @Volatile
-    var isAutoPipEnabled: Boolean = true
+    var isAutoPipEnabled: Boolean = false
 
     fun updatePipState(activity: MainActivity?, isPlaying: Boolean, autoPipEnabled: Boolean) {
       isVideoPlaying = isPlaying
@@ -45,8 +45,8 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme)
     super.onCreate(null)
-    // By default, no video is playing: ensure auto-enter PiP is strictly disabled
-    updatePipState(this, false, isAutoPipEnabled)
+    // Strictly disable auto-enter PiP on launch: only enabled when video actively plays
+    updatePipState(this, false, false)
   }
 
   /**

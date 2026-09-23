@@ -128,7 +128,7 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
             var isPlaying = false;
             for (var i = 0; i < vids.length; i++) {
               var v = vids[i];
-              if (v && !v.paused && !v.ended && v.currentTime > 0) {
+              if (v && !v.paused && !v.ended && v.currentTime > 0 && v.readyState >= 2) {
                 isPlaying = true;
                 break;
               }
@@ -144,6 +144,12 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
           document.addEventListener('play', function(e) {
             if (e.target && e.target.tagName === 'VIDEO') {
               reportMedia(e.target);
+              checkVideoPlayback();
+            }
+          }, true);
+
+          document.addEventListener('playing', function(e) {
+            if (e.target && e.target.tagName === 'VIDEO') {
               checkVideoPlayback();
             }
           }, true);
@@ -165,6 +171,8 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
               reportMedia(e.target);
             }
           }, true);
+
+          setInterval(checkVideoPlayback, 2000);
         } catch(e) {}
       })();
       true;
