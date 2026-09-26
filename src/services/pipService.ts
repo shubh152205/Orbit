@@ -43,14 +43,20 @@ export async function isSystemPipSupported(): Promise<boolean> {
  */
 export async function setSystemPipVideoPlaybackState(
   isPlaying: boolean,
-  autoPipEnabled: boolean = true
+  autoPipEnabled: boolean = true,
+  rect?: { x: number; y: number; width: number; height: number }
 ): Promise<boolean> {
   if (Platform.OS !== 'android') return false
 
-  if (PipModule && typeof PipModule.setVideoPlaybackState === 'function') {
+  if (PipModule) {
     try {
-      await PipModule.setVideoPlaybackState(isPlaying, autoPipEnabled)
-      return true
+      if (rect && typeof PipModule.setVideoPlaybackStateWithRect === 'function') {
+        await PipModule.setVideoPlaybackStateWithRect(isPlaying, autoPipEnabled, rect)
+        return true
+      } else if (typeof PipModule.setVideoPlaybackState === 'function') {
+        await PipModule.setVideoPlaybackState(isPlaying, autoPipEnabled)
+        return true
+      }
     } catch (err) {
       console.warn('Failed to update PiP video playback state:', err)
       return false

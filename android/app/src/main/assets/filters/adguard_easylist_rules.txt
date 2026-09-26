@@ -158,5 +158,12 @@ youtube.com##ytd-banner-promo-renderer
 youtube.com##ytm-promoted-sparkles-web-renderer
 youtube.com##ytm-companion-ad-renderer
 youtube.com##ytm-promoted-video-renderer
+youtube.com##ytm-ad-slot-renderer
+youtube.com##ytm-compact-promoted-item-renderer
+youtube.com##.ytp-ad-player-overlay
+youtube.com##.ytp-ad-image-overlay
 youtube.com###player-ads
 youtube.com##.ytp-ad-message-container
+youtube.com##.video-ads
+youtube.com##.ytp-ad-module
+youtube.com##yt-mealbar-promo-renderer

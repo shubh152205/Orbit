@@ -204,21 +204,27 @@ object BraveNativeEngine {
     ): Boolean {
         if (!shieldsEnabled.get() || url.isEmpty()) return false
 
-        // Never block actual video delivery streams or internal YouTube endpoints (prevents player error loops)
         val lowerUrl = url.lowercase()
         val cleanHost = host.lowercase()
+
+        // 1. Intercept and block dedicated ad networks and YouTube ad/tracking endpoints
+        if (lowerUrl.contains("googleads.g.doubleclick.net") ||
+            lowerUrl.contains("pagead2.googlesyndication.com") ||
+            lowerUrl.contains("s0.2mdn.net") ||
+            lowerUrl.contains("static.doubleclick.net") ||
+            lowerUrl.contains("youtube.com/pagead/") ||
+            lowerUrl.contains("youtube.com/api/stats/ads") ||
+            lowerUrl.contains("youtube.com/ptracking") ||
+            lowerUrl.contains("youtube.com/youtubei/v1/player/ad_break")
+        ) {
+            return true
+        }
+
+        // 2. Never block actual video delivery streams or core YouTube navigation (prevents player error loops)
         if (cleanHost.contains("googlevideo.com") || cleanHost.contains("youtube.com") ||
             lowerUrl.contains("googlevideo.com") || lowerUrl.contains("youtube.com")
         ) {
             return false
-        }
-
-        // Fast match known third-party ad networks
-        if (lowerUrl.contains("googleads.g.doubleclick.net") ||
-            lowerUrl.contains("s0.2mdn.net") ||
-            lowerUrl.contains("static.doubleclick.net")
-        ) {
-            return true
         }
 
         // Block rogue app-takeover schemes immediately

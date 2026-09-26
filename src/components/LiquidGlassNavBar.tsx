@@ -50,6 +50,7 @@ export interface LiquidGlassNavBarProps {
   isVideoStreaming?: boolean
   isCinemaMode?: boolean
   isDesktopMode?: boolean
+  isPipActive?: boolean
   isHidden?: boolean
   onToggleHide?: () => void
   onNavigate: (url: string) => void
@@ -88,6 +89,7 @@ export function LiquidGlassNavBar({
   isVideoStreaming = false,
   isCinemaMode = false,
   isDesktopMode = false,
+  isPipActive = false,
   isHidden,
   onToggleHide,
   onNavigate,
@@ -197,6 +199,10 @@ export function LiquidGlassNavBar({
   const textMutedColor = isDark ? '#94a3b8' : '#64748b'
   const controlBg = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'
   const accentColor = isDark ? '#38bdf8' : '#0284c7'
+
+  if (isPipActive) {
+    return null
+  }
 
   if (isBarHidden) {
     return (

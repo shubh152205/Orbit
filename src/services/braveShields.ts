@@ -254,6 +254,20 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
   window.isAdBlockActive = false;
   window._adblock = false;
 
+  // 2.5 YOUTUBE INNERTUBE AD DEFUSER: Neutralize adPlacements and adSlots in JSON responses
+  try {
+    var origJSONParse = JSON.parse;
+    JSON.parse = function() {
+      var r = origJSONParse.apply(this, arguments);
+      if (r && typeof r === 'object') {
+        if (r.adPlacements) delete r.adPlacements;
+        if (r.playerAds) delete r.playerAds;
+        if (r.adSlots) delete r.adSlots;
+      }
+      return r;
+    };
+  } catch(e) {}
+
   // 3. BRAVE COSMETIC FILTERING: Inject high-specificity procedural CSS
   var cosmeticCSS = [
     'iframe[src*="ad"]',
@@ -281,6 +295,8 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
     '#player-ads',
     '.ytp-ad-overlay-container',
     '.ytp-ad-message-container',
+    '.ytp-ad-player-overlay',
+    '.ytp-ad-image-overlay',
     'ytd-promoted-sparkles-web-renderer',
     'ytd-display-ad-renderer',
     'ytd-in-feed-ad-layout-renderer',
@@ -289,10 +305,14 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
     'ytm-promoted-sparkles-web-renderer',
     'ytm-companion-ad-renderer',
     'ytm-promoted-video-renderer',
+    'ytm-ad-slot-renderer',
+    'ytm-compact-promoted-item-renderer',
     '#masthead-ad',
     '.ytd-merch-shelf-renderer',
     'ytd-ad-slot-renderer',
-    'yt-mealbar-promo-renderer'
+    'yt-mealbar-promo-renderer',
+    '.video-ads',
+    '.ytp-ad-module'
   ].join(', ') + ' { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; height: 0 !important; }';
 
   var styleEl = document.createElement('style');
@@ -371,14 +391,16 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
     try {
       if (window.location.hostname.indexOf('youtube.com') === -1) return;
 
-      var player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+      var player = document.getElementById('movie_player') || 
+                   document.getElementById('player') || 
+                   document.querySelector('.html5-video-player');
       var isAdActive = false;
 
       // Strictly detect active ad states on the YouTube player container
       if (player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'))) {
         isAdActive = true;
       }
-      var adOverlay = document.querySelector('.ytp-ad-player-overlay');
+      var adOverlay = document.querySelector('.ytp-ad-player-overlay, .ytp-ad-overlay-container, .ytp-ad-text, .video-ads .ad-container');
       if (adOverlay && adOverlay.offsetParent !== null) {
         isAdActive = true;
       }
@@ -391,18 +413,17 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
           prevMutedState = video.muted;
         }
 
-        // Mute and fast-forward ONLY the advertisement
+        // Mute and fast-forward the advertisement
         video.muted = true;
         video.playbackRate = 16.0;
 
-        // Advance ONLY if it's an ad (duration is short, <= 65s). Never jump the main video!
-        if (isFinite(video.duration) && video.duration > 0 && video.duration < 65) {
+        if (isFinite(video.duration) && video.duration > 0) {
           video.currentTime = video.duration;
         }
 
         // Auto-click any available skip button
         var skipBtn = document.querySelector(
-          '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-slot button, button.ytp-ad-skip-button-text'
+          '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-slot button, button.ytp-ad-skip-button-text, .videoAdUiSkipButton, button[class*="skip-button"]'
         );
         if (skipBtn) {
           try {
@@ -467,6 +488,8 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
       Object.defineProperty(window, 'onpagehide', { get: function() { return null; }, set: function() {}, configurable: true });
       Object.defineProperty(document, 'onvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
       Object.defineProperty(document, 'onwebkitvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
+    } catch(e) {}
+
     // Reinforce playsinline attributes on HTML5 media elements
     function keepMediaActive() {
       var medias = document.querySelectorAll('video, audio');

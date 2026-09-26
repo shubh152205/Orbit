@@ -267,19 +267,41 @@ class BraveMediaPlaybackService : Service() {
             wv.post {
                 when (actionName) {
                     "play" -> wv.evaluateJavascript(
-                        "(function(){ var v=document.querySelector('video'); if(v) v.play(); var btn=document.querySelector('.ytp-play-button'); if(btn && btn.getAttribute('data-title-no-tooltip')==='Play') btn.click(); })();",
+                        "(function(){" +
+                        "  var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');" +
+                        "  if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }" +
+                        "  var v = document.querySelector('video'); if (v && v.paused) v.play().catch(function(){});" +
+                        "  var btn = document.querySelector('button.player-control-play-pause-icon, .ytp-play-button, button[aria-label=\"Play video\"]');" +
+                        "  if (btn) btn.click();" +
+                        "  var overlay = document.querySelector('.player-controls-middle, .ytp-bezel');" +
+                        "  if (overlay) { overlay.style.display = 'none'; setTimeout(function(){ overlay.style.display = ''; }, 250); }" +
+                        "})();",
                         null
                     )
                     "pause" -> wv.evaluateJavascript(
-                        "(function(){ var v=document.querySelector('video'); if(v) v.pause(); var btn=document.querySelector('.ytp-play-button'); if(btn && btn.getAttribute('data-title-no-tooltip')==='Pause') btn.click(); })();",
+                        "(function(){" +
+                        "  var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');" +
+                        "  if (yt && typeof yt.pauseVideo === 'function') { yt.pauseVideo(); }" +
+                        "  var v = document.querySelector('video'); if (v && !v.paused) v.pause();" +
+                        "  var btn = document.querySelector('button.player-control-play-pause-icon, .ytp-play-button, button[aria-label=\"Pause video\"]');" +
+                        "  if (btn) btn.click();" +
+                        "})();",
                         null
                     )
                     "forward" -> wv.evaluateJavascript(
-                        "(function(){ var v=document.querySelector('video'); if(v) v.currentTime += 10; })();",
+                        "(function(){" +
+                        "  var yt = document.getElementById('movie_player') || document.getElementById('player');" +
+                        "  if (yt && typeof yt.seekBy === 'function') { yt.seekBy(10); return; }" +
+                        "  var v = document.querySelector('video'); if(v) v.currentTime += 10;" +
+                        "})();",
                         null
                     )
                     "backward" -> wv.evaluateJavascript(
-                        "(function(){ var v=document.querySelector('video'); if(v) v.currentTime = Math.max(0, v.currentTime - 10); })();",
+                        "(function(){" +
+                        "  var yt = document.getElementById('movie_player') || document.getElementById('player');" +
+                        "  if (yt && typeof yt.seekBy === 'function') { yt.seekBy(-10); return; }" +
+                        "  var v = document.querySelector('video'); if(v) v.currentTime = Math.max(0, v.currentTime - 10);" +
+                        "})();",
                         null
                     )
                 }

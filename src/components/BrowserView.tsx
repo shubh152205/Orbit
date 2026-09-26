@@ -38,7 +38,12 @@ export interface BrowserViewProps {
   onMediaDetected?: (media: VideoStreamItem) => void
   onVideoStreamStatus?: (
     isStreaming: boolean,
-    mediaInfo?: { title?: string; duration?: number; currentTime?: number }
+    mediaInfo?: {
+      title?: string
+      duration?: number
+      currentTime?: number
+      rect?: { x: number; y: number; width: number; height: number }
+    }
   ) => void
   onBlockedAd?: (count?: number) => void
   renderError?: (errorDomain?: string, errorCode?: number, errorDesc?: string) => React.ReactElement
@@ -126,15 +131,46 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
             }
           }
 
+          function isMainVideo(v) {
+            if (!v) return false;
+            var rect = v.getBoundingClientRect();
+            // Video element must have visible layout dimensions
+            if (rect.width < 160 || rect.height < 90) return false;
+
+            // YouTube specific: filter out feed auto-play preview snippets
+            if (window.location.hostname.indexOf('youtube.com') !== -1) {
+              var isWatchPage = window.location.pathname.indexOf('/watch') !== -1 ||
+                                window.location.pathname.indexOf('/shorts') !== -1 ||
+                                window.location.pathname.indexOf('/live') !== -1;
+              if (!isWatchPage) {
+                // If not on a dedicated watch/shorts page, ignore inline previews in feed/search
+                if (v.closest('ytm-inline-playback-renderer') ||
+                    v.closest('.ytm-inline-playback-player') ||
+                    v.closest('ytm-item-section-renderer')) {
+                  return false;
+                }
+              }
+            }
+            return true;
+          }
+
           function checkVideoPlayback() {
             var vids = document.querySelectorAll('video');
             var isPlaying = false;
             var activeVid = null;
+            var activeRect = null;
             for (var i = 0; i < vids.length; i++) {
               var v = vids[i];
-              if (v && !v.paused && !v.ended && v.currentTime > 0 && v.readyState >= 2) {
+              if (v && !v.paused && !v.ended && v.currentTime > 0 && v.readyState >= 2 && isMainVideo(v)) {
                 isPlaying = true;
                 activeVid = v;
+                var r = v.getBoundingClientRect();
+                activeRect = {
+                  x: Math.round(r.left),
+                  y: Math.round(r.top),
+                  width: Math.round(r.width),
+                  height: Math.round(r.height)
+                };
                 break;
               }
             }
@@ -144,7 +180,8 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
                 isStreaming: isPlaying,
                 title: document.title || 'Web Video Stream',
                 duration: activeVid ? (activeVid.duration || 0) : 0,
-                currentTime: activeVid ? (activeVid.currentTime || 0) : 0
+                currentTime: activeVid ? (activeVid.currentTime || 0) : 0,
+                rect: activeRect
               }));
             }
           }
@@ -247,6 +284,7 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
             title: data.title,
             duration: data.duration,
             currentTime: data.currentTime,
+            rect: data.rect,
           })
         } else if (data.type === 'SHIELDS_ADS_BLOCKED') {
           onBlockedAd?.(data.count)

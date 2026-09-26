@@ -197,6 +197,7 @@ function MainStreamNestApp() {
   const [isPipActive, setIsPipActive] = useState(false)
   const [autoStartPip, setAutoStartPip] = useState(false)
   const [videoPlaybackPositionMillis, setVideoPlaybackPositionMillis] = useState(0)
+  const videoRectRef = useRef<{ x: number; y: number; width: number; height: number } | undefined>(undefined)
 
   // Listen for native Android Picture-in-Picture mode transitions
   useEffect(() => {
@@ -212,13 +213,17 @@ function MainStreamNestApp() {
               if (s) s.style.display = 'none';
               var v = document.querySelector('video');
               if (!v) return;
+
+              window.__streamnest_pip_saved_scroll = { x: window.scrollX, y: window.scrollY };
+              window.scrollTo(0, 0);
+
               var style = document.getElementById('__streamnest_pip_style');
               if (!style) {
                 style = document.createElement('style');
                 style.id = '__streamnest_pip_style';
                 (document.head || document.documentElement).appendChild(style);
               }
-              style.textContent = 'html, body { overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; } video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; z-index: 2147483647 !important; object-fit: contain !important; background: #000 !important; } #player, .html5-video-player, ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer, .watch-below-the-player { background: #000 !important; }';
+              style.textContent = 'html, body { overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; width: 100vw !important; height: 100vh !important; } ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer, #below, .watch-below-the-player, #related, #comments, ytm-item-section-renderer, header, nav, footer, .player-controls-bottom, .ytp-chrome-top, .ytp-chrome-bottom { display: none !important; } #player, #player-container-id, .player-container, .html5-video-player, .html5-video-container { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; margin: 0 !important; padding: 0 !important; z-index: 2147483646 !important; background: #000 !important; } video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; z-index: 2147483647 !important; object-fit: contain !important; background: #000 !important; }';
             })();
             true;
           `)
@@ -229,6 +234,10 @@ function MainStreamNestApp() {
               if (s) s.style.display = 'block';
               var style = document.getElementById('__streamnest_pip_style');
               if (style) style.remove();
+              if (window.__streamnest_pip_saved_scroll) {
+                window.scrollTo(window.__streamnest_pip_saved_scroll.x, window.__streamnest_pip_saved_scroll.y);
+              }
+              window.dispatchEvent(new Event('resize'));
             })();
             true;
           `)
@@ -249,10 +258,14 @@ function MainStreamNestApp() {
           } else {
             browserRef.current?.injectJavaScript(`
               (function() {
+                var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
+                if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
                 var v = document.querySelector('video');
-                if (v) v.play();
-                var btn = document.querySelector('.ytp-play-button');
-                if (btn && btn.getAttribute('data-title-no-tooltip') === 'Play') btn.click();
+                if (v && v.paused) v.play().catch(function(){});
+                var btn = document.querySelector('button.player-control-play-pause-icon, .ytp-play-button, button[aria-label="Play video"]');
+                if (btn) btn.click();
+                var overlay = document.querySelector('.player-controls-middle, .ytp-bezel');
+                if (overlay) { overlay.style.display = 'none'; setTimeout(function(){ overlay.style.display = ''; }, 250); }
               })();
               true;
             `)
@@ -263,10 +276,12 @@ function MainStreamNestApp() {
           } else {
             browserRef.current?.injectJavaScript(`
               (function() {
+                var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
+                if (yt && typeof yt.pauseVideo === 'function') { yt.pauseVideo(); }
                 var v = document.querySelector('video');
-                if (v) v.pause();
-                var btn = document.querySelector('.ytp-play-button');
-                if (btn && btn.getAttribute('data-title-no-tooltip') === 'Pause') btn.click();
+                if (v && !v.paused) v.pause();
+                var btn = document.querySelector('button.player-control-play-pause-icon, .ytp-play-button, button[aria-label="Pause video"]');
+                if (btn) btn.click();
               })();
               true;
             `)
@@ -274,6 +289,8 @@ function MainStreamNestApp() {
         } else if (action === 'forward') {
           browserRef.current?.injectJavaScript(`
             (function() {
+              var yt = document.getElementById('movie_player') || document.getElementById('player');
+              if (yt && typeof yt.seekBy === 'function') { yt.seekBy(10); return; }
               var v = document.querySelector('video');
               if (v) v.currentTime += 10;
             })();
@@ -582,12 +599,15 @@ function MainStreamNestApp() {
   const isAnyVideoPlaying = (isCinemaMode && isCinemaPlaying) || (!isCinemaMode && isVideoPlayingOnPage)
 
   // Synchronize Android Native System PiP capability:
-  // Auto-enter PiP on swipe-home is strictly limited to Cinema Mode fullscreen playback,
-  // preventing accidental PiP conversions when browsing web pages or when media is paused.
+  // Auto-enter PiP on swipe-home is active whenever an actual video is actively playing on page or in cinema
   useEffect(() => {
-    const shouldAutoPip = isCinemaMode && isCinemaPlaying && autoPipEnabled
-    setSystemPipVideoPlaybackState(shouldAutoPip, autoPipEnabled).catch(() => {})
-  }, [isCinemaMode, isCinemaPlaying, autoPipEnabled])
+    const shouldAutoPip = isAnyVideoPlaying && autoPipEnabled
+    setSystemPipVideoPlaybackState(
+      shouldAutoPip,
+      autoPipEnabled,
+      isCinemaMode ? undefined : videoRectRef.current
+    ).catch(() => {})
+  }, [isAnyVideoPlaying, autoPipEnabled, isCinemaMode])
 
   const handleTogglePip = async (posMillis?: number) => {
     if (typeof posMillis === 'number') {
@@ -608,13 +628,15 @@ function MainStreamNestApp() {
         (function() {
           var v = document.querySelector('video');
           if (!v) return;
+          window.__streamnest_pip_saved_scroll = { x: window.scrollX, y: window.scrollY };
+          window.scrollTo(0, 0);
           var style = document.getElementById('__streamnest_pip_style');
           if (!style) {
             style = document.createElement('style');
             style.id = '__streamnest_pip_style';
             (document.head || document.documentElement).appendChild(style);
           }
-          style.textContent = 'html, body { overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; } video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; z-index: 2147483647 !important; object-fit: contain !important; background: #000 !important; } #player, .html5-video-player, ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer, .watch-below-the-player { background: #000 !important; }';
+          style.textContent = 'html, body { overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; width: 100vw !important; height: 100vh !important; } ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer, #below, .watch-below-the-player, #related, #comments, ytm-item-section-renderer, header, nav, footer, .player-controls-bottom, .ytp-chrome-top, .ytp-chrome-bottom { display: none !important; } #player, #player-container-id, .player-container, .html5-video-player, .html5-video-container { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; margin: 0 !important; padding: 0 !important; z-index: 2147483646 !important; background: #000 !important; } video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; z-index: 2147483647 !important; object-fit: contain !important; background: #000 !important; }';
         })();
         true;
       `)
@@ -666,33 +688,36 @@ function MainStreamNestApp() {
       />
 
       {/* Top Browser Liquid Glass Navbar - Apple Frosted Glass with Integrated Progress Rim */}
-      <LiquidGlassNavBar
-        currentUrl={currentUrl}
-        pageTitle={pageTitle}
-        isLoading={isLoading}
-        loadProgress={loadProgress}
-        canGoBack={canGoBack}
-        canGoForward={canGoForward}
-        isDark={isAppDark}
-        blockedAdsCount={blockedAdsCount}
-        shieldsEnabled={shieldsEnabled}
-        isVideoStreaming={isVideoStreaming}
-        isCinemaMode={isCinemaMode}
-        isDesktopMode={isDesktopMode}
-        isHidden={isCleanMode || isPipActive}
-        onToggleHide={() => setIsCleanMode(!isCleanMode)}
-        onNavigate={handleNavigate}
-        onBack={() => browserRef.current?.goBack()}
-        onForward={() => browserRef.current?.goForward()}
-        onReload={() => browserRef.current?.reload()}
-        onOpenHome={() => setShowHomeModal(true)}
-        onOpenShields={() => setShowShieldsModal(true)}
-        onOpenPortals={() => setShowPortalsModal(true)}
-        onOpenDownloads={() => setShowDownloadsModal(true)}
-        onOpenSettings={() => setShowSettingsModal(true)}
-        onToggleCinemaMode={() => setIsCinemaMode(!isCinemaMode)}
-        onTriggerPip={() => handleTogglePip()}
-      />
+      {!isPipActive && (
+        <LiquidGlassNavBar
+          currentUrl={currentUrl}
+          pageTitle={pageTitle}
+          isLoading={isLoading}
+          loadProgress={loadProgress}
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          isDark={isAppDark}
+          blockedAdsCount={blockedAdsCount}
+          shieldsEnabled={shieldsEnabled}
+          isVideoStreaming={isVideoStreaming}
+          isCinemaMode={isCinemaMode}
+          isDesktopMode={isDesktopMode}
+          isPipActive={isPipActive}
+          isHidden={isCleanMode}
+          onToggleHide={() => setIsCleanMode(!isCleanMode)}
+          onNavigate={handleNavigate}
+          onBack={() => browserRef.current?.goBack()}
+          onForward={() => browserRef.current?.goForward()}
+          onReload={() => browserRef.current?.reload()}
+          onOpenHome={() => setShowHomeModal(true)}
+          onOpenShields={() => setShowShieldsModal(true)}
+          onOpenPortals={() => setShowPortalsModal(true)}
+          onOpenDownloads={() => setShowDownloadsModal(true)}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          onToggleCinemaMode={() => setIsCinemaMode(!isCinemaMode)}
+          onTriggerPip={() => handleTogglePip()}
+        />
+      )}
 
       {/* Live Sniffed Video Quick Action Banner */}
       {sniffedStream && !isCleanMode && !isPipActive && (
@@ -822,6 +847,11 @@ function MainStreamNestApp() {
               }}
               onVideoStreamStatus={(isStreaming, mediaInfo) => {
                 setIsVideoPlayingOnPage(Boolean(isStreaming))
+                if (mediaInfo?.rect) {
+                  videoRectRef.current = mediaInfo.rect
+                } else if (!isStreaming) {
+                  videoRectRef.current = undefined
+                }
                 if (mediaInfo?.title) {
                   setPageTitle(mediaInfo.title)
                 }
