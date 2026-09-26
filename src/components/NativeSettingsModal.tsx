@@ -22,6 +22,7 @@ import {
   PictureInPicture2,
   Lock,
   ChevronRight,
+  Headphones,
 } from 'lucide-react-native'
 import { THEME } from '../theme/tokens'
 import { LiquidGlassContainer, LiquidGlassButton } from './LiquidGlass'
@@ -186,21 +187,21 @@ export function NativeSettingsModal({
                 <View style={styles.groupedTable}>
                   <View style={styles.tableRow}>
                     <View style={styles.rowLeading}>
-                      <View style={[styles.symbolBox, { backgroundColor: '#38bdf8' }]}>
-                        <Tv size={13} color="#ffffff" />
+                      <View style={[styles.symbolBox, { backgroundColor: '#10b981' }]}>
+                        <Headphones size={13} color="#ffffff" />
                       </View>
                       <View style={styles.textColumn}>
-                        <Text style={styles.rowTitle}>Background Play</Text>
+                        <Text style={styles.rowTitle}>Background Audio Mode</Text>
                         <Text style={styles.rowSubtitle}>
-                          Keep audio streaming when app closes (Soul/Brave)
+                          Keep audio streaming with screen off or app minimized
                         </Text>
                       </View>
                     </View>
                     <Switch
                       value={backgroundPlayEnabled}
                       onValueChange={onToggleBackgroundPlay}
-                      trackColor={{ false: 'rgba(255, 255, 255, 0.1)', true: 'rgba(56, 189, 248, 0.45)' }}
-                      thumbColor={backgroundPlayEnabled ? '#38bdf8' : '#64748b'}
+                      trackColor={{ false: 'rgba(255, 255, 255, 0.1)', true: 'rgba(16, 185, 129, 0.45)' }}
+                      thumbColor={backgroundPlayEnabled ? '#10b981' : '#64748b'}
                     />
                   </View>
 

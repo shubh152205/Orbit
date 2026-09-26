@@ -52,7 +52,7 @@ export function NativeFloatingDock({
         >
           <LiquidGlassContainer type="pill" variant="floating" style={styles.collapsedPearl}>
             <View style={styles.pearlGlowDot} />
-            <Text style={styles.pearlText}>StreamNest</Text>
+            <Text style={styles.pearlText}>Orbit</Text>
             <Maximize2 size={12} color={THEME.colors.textSecondary} />
           </LiquidGlassContainer>
         </TouchableOpacity>

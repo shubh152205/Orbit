@@ -34,7 +34,7 @@ import com.streamnest.app.adblock.BraveWebView
 class BraveMediaPlaybackService : Service() {
 
     companion object {
-        const val CHANNEL_ID = "streamnest_media_playback_channel"
+        const val CHANNEL_ID = "orbit_media_playback_channel"
         const val NOTIFICATION_ID = 2001
 
         const val ACTION_START = "com.streamnest.app.media.ACTION_START"
@@ -43,6 +43,7 @@ class BraveMediaPlaybackService : Service() {
         const val ACTION_PAUSE = "com.streamnest.app.media.ACTION_PAUSE"
         const val ACTION_FORWARD = "com.streamnest.app.media.ACTION_FORWARD"
         const val ACTION_REWIND = "com.streamnest.app.media.ACTION_REWIND"
+        const val ACTION_NEXT = "com.streamnest.app.media.ACTION_NEXT"
         const val ACTION_UPDATE_STATE = "com.streamnest.app.media.ACTION_UPDATE_STATE"
 
         const val EXTRA_TITLE = "extra_title"
@@ -105,7 +106,7 @@ class BraveMediaPlaybackService : Service() {
     private var wifiLock: WifiManager.WifiLock? = null
     private var mediaSession: MediaSessionCompat? = null
 
-    private var currentTitle: String = "StreamNest Media"
+    private var currentTitle: String = "Orbit Media"
     private var currentSubtitle: String = "Streaming in background"
     private var isPlaying: Boolean = true
 
@@ -120,7 +121,7 @@ class BraveMediaPlaybackService : Service() {
     }
 
     private fun setupMediaSession() {
-        mediaSession = MediaSessionCompat(this, "StreamNestMediaSession").apply {
+        mediaSession = MediaSessionCompat(this, "OrbitMediaSession").apply {
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() {
                     handlePlayAction()
@@ -136,6 +137,10 @@ class BraveMediaPlaybackService : Service() {
 
                 override fun onRewind() {
                     handleRewindAction()
+                }
+
+                override fun onSkipToNext() {
+                    handleNextAction()
                 }
 
                 override fun onStop() {
@@ -154,6 +159,7 @@ class BraveMediaPlaybackService : Service() {
                 PlaybackStateCompat.ACTION_PLAY_PAUSE or
                 PlaybackStateCompat.ACTION_FAST_FORWARD or
                 PlaybackStateCompat.ACTION_REWIND or
+                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
                 PlaybackStateCompat.ACTION_STOP
 
         mediaSession?.setPlaybackState(
@@ -193,6 +199,10 @@ class BraveMediaPlaybackService : Service() {
             }
             ACTION_REWIND -> {
                 handleRewindAction()
+                return START_STICKY
+            }
+            ACTION_NEXT -> {
+                handleNextAction()
                 return START_STICKY
             }
             ACTION_UPDATE_STATE -> {
@@ -255,6 +265,10 @@ class BraveMediaPlaybackService : Service() {
         dispatchMediaAction("backward")
     }
 
+    private fun handleNextAction() {
+        dispatchMediaAction("next")
+    }
+
     private fun refreshNotification() {
         val notification = buildNotification(currentTitle, currentSubtitle, isPlaying)
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -304,6 +318,19 @@ class BraveMediaPlaybackService : Service() {
                         "})();",
                         null
                     )
+                    "next" -> wv.evaluateJavascript(
+                        "(function(){" +
+                        "  var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');" +
+                        "  if (yt && typeof yt.nextVideo === 'function') { yt.nextVideo(); return; }" +
+                        "  var nextBtn = document.querySelector('.ytp-next-button, button[aria-label=\"Next video\"], button[aria-label=\"Next (SHIFT+n)\"], button.ytp-next-button');" +
+                        "  if (nextBtn) { nextBtn.click(); return; }" +
+                        "  var genericNext = document.querySelector('[data-action=\"next\"], .next-button, .vjs-next-control');" +
+                        "  if (genericNext) { genericNext.click(); return; }" +
+                        "  var v = document.querySelector('video');" +
+                        "  if (v && isFinite(v.duration) && v.duration > 0) { v.currentTime = Math.max(0, v.duration - 0.5); }" +
+                        "})();",
+                        null
+                    )
                 }
             }
         }
@@ -324,7 +351,7 @@ class BraveMediaPlaybackService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "StreamNest Media Playback",
+                "Orbit Media Playback",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Controls and maintains media audio in the background and when screen is off"
@@ -359,22 +386,25 @@ class BraveMediaPlaybackService : Service() {
         val forwardIntent = Intent(this, BraveMediaPlaybackService::class.java).apply { action = ACTION_FORWARD }
         val forwardPending = PendingIntent.getService(this, 3, forwardIntent, flags)
 
+        val nextIntent = Intent(this, BraveMediaPlaybackService::class.java).apply { action = ACTION_NEXT }
+        val nextPending = PendingIntent.getService(this, 4, nextIntent, flags)
+
         val stopIntent = Intent(this, BraveMediaPlaybackService::class.java).apply { action = ACTION_STOP }
-        val stopPending = PendingIntent.getService(this, 4, stopIntent, flags)
+        val stopPending = PendingIntent.getService(this, 5, stopIntent, flags)
 
         val playPauseIcon = if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         val playPauseText = if (playing) "Pause" else "Play"
 
         val mediaStyle = MediaStyle()
             .setMediaSession(mediaSession?.sessionToken)
-            .setShowActionsInCompactView(0, 1, 2)
+            .setShowActionsInCompactView(0, 1, 3) // Rewind, Play/Pause, Next
             .setShowCancelButton(true)
             .setCancelButtonIntent(stopPending)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(subtitle)
-            .setSubText("StreamNest Browser")
+            .setSubText("Orbit Browser")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(contentPendingIntent)
             .setDeleteIntent(stopPending)
@@ -386,6 +416,7 @@ class BraveMediaPlaybackService : Service() {
             .addAction(android.R.drawable.ic_media_rew, "-10s", rewindPending)
             .addAction(playPauseIcon, playPauseText, playPausePending)
             .addAction(android.R.drawable.ic_media_ff, "+10s", forwardPending)
+            .addAction(android.R.drawable.ic_media_next, "Next", nextPending)
             .build()
     }
 
@@ -395,7 +426,7 @@ class BraveMediaPlaybackService : Service() {
                 val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
                 wakeLock = powerManager.newWakeLock(
                     PowerManager.PARTIAL_WAKE_LOCK,
-                    "StreamNest:MediaPlaybackWakeLock"
+                    "Orbit:MediaPlaybackWakeLock"
                 ).apply {
                     setReferenceCounted(false)
                     acquire(6 * 60 * 60 * 1000L) // 6 hours
@@ -414,7 +445,7 @@ class BraveMediaPlaybackService : Service() {
                     @Suppress("DEPRECATION")
                     WifiManager.WIFI_MODE_FULL
                 }
-                wifiLock = wifiManager.createWifiLock(wifiMode, "StreamNest:MediaWifiLock").apply {
+                wifiLock = wifiManager.createWifiLock(wifiMode, "Orbit:MediaWifiLock").apply {
                     setReferenceCounted(false)
                     acquire()
                 }

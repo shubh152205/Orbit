@@ -53,5 +53,21 @@ class BraveWebView(context: ThemedReactContext) : RNCWebView(context) {
             super.onWindowVisibilityChanged(visibility)
         }
     }
+
+    override fun onPause() {
+        if (isBackgroundPlayEnabled) {
+            // Keep Chromium media decoding and timers active during Picture-in-Picture and background mode
+            return
+        }
+        super.onPause()
+    }
+
+    override fun pauseTimers() {
+        if (isBackgroundPlayEnabled) {
+            // Prevent freezing JS timers so video and audio playback continues uninterrupted
+            return
+        }
+        super.pauseTimers()
+    }
 }
 

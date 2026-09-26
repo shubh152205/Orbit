@@ -488,6 +488,30 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
       Object.defineProperty(window, 'onpagehide', { get: function() { return null; }, set: function() {}, configurable: true });
       Object.defineProperty(document, 'onvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
       Object.defineProperty(document, 'onwebkitvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
+      document.hasFocus = function() { return true; };
+    } catch(e) {}
+
+    // Spoof IntersectionObserver so video elements are always considered visible and in-viewport
+    try {
+      var OrigIntersectionObserver = window.IntersectionObserver;
+      if (OrigIntersectionObserver) {
+        var PatchedIntersectionObserver = function(callback, options) {
+          return new OrigIntersectionObserver(function(entries, observer) {
+            for (var i = 0; i < entries.length; i++) {
+              var entry = entries[i];
+              if (entry.target && (entry.target.tagName === 'VIDEO' || entry.target.querySelector('video') || entry.target.id === 'player' || entry.target.id === 'movie_player')) {
+                try {
+                  Object.defineProperty(entry, 'isIntersecting', { get: function() { return true; }, configurable: true });
+                  Object.defineProperty(entry, 'intersectionRatio', { get: function() { return 1.0; }, configurable: true });
+                } catch(ex) {}
+              }
+            }
+            callback(entries, observer);
+          }, options);
+        };
+        PatchedIntersectionObserver.prototype = OrigIntersectionObserver.prototype;
+        window.IntersectionObserver = PatchedIntersectionObserver;
+      }
     } catch(e) {}
 
     // Reinforce playsinline attributes on HTML5 media elements
@@ -567,6 +591,30 @@ export const BACKGROUND_PLAY_EARLY_JS = `
       Object.defineProperty(window, 'onpagehide', { get: function() { return null; }, set: function() {}, configurable: true });
       Object.defineProperty(document, 'onvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
       Object.defineProperty(document, 'onwebkitvisibilitychange', { get: function() { return null; }, set: function() {}, configurable: true });
+      document.hasFocus = function() { return true; };
+    } catch(e) {}
+
+    // Spoof IntersectionObserver so video elements never trigger paused state on scroll or blur
+    try {
+      var OrigIntersectionObserver = window.IntersectionObserver;
+      if (OrigIntersectionObserver) {
+        var PatchedIntersectionObserver = function(callback, options) {
+          return new OrigIntersectionObserver(function(entries, observer) {
+            for (var i = 0; i < entries.length; i++) {
+              var entry = entries[i];
+              if (entry.target && (entry.target.tagName === 'VIDEO' || entry.target.querySelector('video') || entry.target.id === 'player' || entry.target.id === 'movie_player')) {
+                try {
+                  Object.defineProperty(entry, 'isIntersecting', { get: function() { return true; }, configurable: true });
+                  Object.defineProperty(entry, 'intersectionRatio', { get: function() { return 1.0; }, configurable: true });
+                } catch(ex) {}
+              }
+            }
+            callback(entries, observer);
+          }, options);
+        };
+        PatchedIntersectionObserver.prototype = OrigIntersectionObserver.prototype;
+        window.IntersectionObserver = PatchedIntersectionObserver;
+      }
     } catch(e) {}
   } catch (err) {}
 })();

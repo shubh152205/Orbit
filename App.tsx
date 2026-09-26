@@ -33,6 +33,7 @@ import {
   Settings,
   Film,
   Moon,
+  Headphones,
 } from 'lucide-react-native'
 
 import { LiquidGlassNavBar } from './src/components/LiquidGlassNavBar'
@@ -83,14 +84,14 @@ class AppErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: any) {
-    console.error('StreamNest Error:', error, errorInfo)
+    console.error('Orbit Error:', error, errorInfo)
   }
 
   render() {
     if (this.state.hasError) {
       return (
         <SafeAreaView style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>StreamNest App Notice</Text>
+          <Text style={styles.errorTitle}>Orbit App Notice</Text>
           <Text style={styles.errorDesc}>
             {this.state.error?.message || 'An unexpected error occurred.'}
           </Text>
@@ -224,6 +225,19 @@ function MainStreamNestApp() {
                 (document.head || document.documentElement).appendChild(style);
               }
               style.textContent = 'html, body { overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; width: 100vw !important; height: 100vh !important; } ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer, #below, .watch-below-the-player, #related, #comments, ytm-item-section-renderer, header, nav, footer, .player-controls-bottom, .ytp-chrome-top, .ytp-chrome-bottom { display: none !important; } #player, #player-container-id, .player-container, .html5-video-player, .html5-video-container { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; margin: 0 !important; padding: 0 !important; z-index: 2147483646 !important; background: #000 !important; } video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; z-index: 2147483647 !important; object-fit: contain !important; background: #000 !important; }';
+
+              // Ensure video keeps playing smoothly during and after entering PiP mode
+              var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
+              if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
+              if (v && v.paused) { v.play().catch(function(){}); }
+              setTimeout(function() {
+                if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
+                if (v && v.paused) { v.play().catch(function(){}); }
+              }, 250);
+              setTimeout(function() {
+                if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
+                if (v && v.paused) { v.play().catch(function(){}); }
+              }, 600);
             })();
             true;
           `)
@@ -245,6 +259,23 @@ function MainStreamNestApp() {
       }
     )
     return () => sub.remove()
+  }, [])
+
+  // Skip to next video on YouTube or generic HTML5 media
+  const handleSkipNext = useCallback(() => {
+    browserRef.current?.injectJavaScript(`
+      (function() {
+        var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
+        if (yt && typeof yt.nextVideo === 'function') { yt.nextVideo(); return; }
+        var nextBtn = document.querySelector('.ytp-next-button, button[aria-label="Next video"], button[aria-label="Next (SHIFT+n)"], button.ytp-next-button');
+        if (nextBtn) { nextBtn.click(); return; }
+        var genericNext = document.querySelector('[data-action="next"], .next-button, .vjs-next-control');
+        if (genericNext) { genericNext.click(); return; }
+        var v = document.querySelector('video');
+        if (v && isFinite(v.duration) && v.duration > 0) { v.currentTime = Math.max(0, v.duration - 0.5); }
+      })();
+      true;
+    `)
   }, [])
 
   // Listen for interactive Android notification player controls
@@ -304,11 +335,13 @@ function MainStreamNestApp() {
             })();
             true;
           `)
+        } else if (action === 'next') {
+          handleSkipNext()
         }
       }
     )
     return () => sub.remove()
-  }, [isCinemaMode])
+  }, [isCinemaMode, handleSkipNext])
 
   // Streaming Engine Settings: Background Play (Soul/Brave mode) & Screen Off Display Saver
   const [backgroundPlayEnabled, setBackgroundPlayEnabled] = useState(true)
@@ -430,7 +463,7 @@ function MainStreamNestApp() {
       } else {
         Alert.alert(
           'App Sandbox Active',
-          'System media access not granted. Offline downloads will be saved directly into StreamNest private app sandbox.'
+          'System media access not granted. Offline downloads will be saved directly into Orbit private app sandbox.'
         )
       }
       return granted
@@ -637,6 +670,19 @@ function MainStreamNestApp() {
             (document.head || document.documentElement).appendChild(style);
           }
           style.textContent = 'html, body { overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; width: 100vw !important; height: 100vh !important; } ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer, #below, .watch-below-the-player, #related, #comments, ytm-item-section-renderer, header, nav, footer, .player-controls-bottom, .ytp-chrome-top, .ytp-chrome-bottom { display: none !important; } #player, #player-container-id, .player-container, .html5-video-player, .html5-video-container { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; margin: 0 !important; padding: 0 !important; z-index: 2147483646 !important; background: #000 !important; } video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; z-index: 2147483647 !important; object-fit: contain !important; background: #000 !important; }';
+
+          // Keep video actively playing during PiP mode transition
+          var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
+          if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
+          if (v && v.paused) { v.play().catch(function(){}); }
+          setTimeout(function() {
+            if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
+            if (v && v.paused) { v.play().catch(function(){}); }
+          }, 250);
+          setTimeout(function() {
+            if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
+            if (v && v.paused) { v.play().catch(function(){}); }
+          }, 600);
         })();
         true;
       `)
@@ -655,6 +701,20 @@ function MainStreamNestApp() {
       }
     }
   }
+
+  const handleToggleBackgroundAudio = useCallback(async () => {
+    const nextVal = !backgroundPlayEnabled
+    setBackgroundPlayEnabled(nextVal)
+    await backgroundAudio.setBackgroundPlayEnabled(nextVal)
+    if (!nextVal) {
+      await backgroundAudio.stopKeepAlive()
+    } else if (isAnyVideoPlaying) {
+      const subtitle = currentUrl.replace(/^https?:\/\//, '').split('/')[0]
+      const title = isCinemaMode ? activeVideo.title : (pageTitle || 'Web Video Stream')
+      backgroundAudio.startKeepAlive(title, subtitle)
+      backgroundAudio.updatePlaybackState(true, title, subtitle)
+    }
+  }, [backgroundPlayEnabled, isAnyVideoPlaying, currentUrl, isCinemaMode, activeVideo.title, pageTitle])
 
   const handlePlayDownloadedVideo = (video: VideoStreamItem) => {
     setActiveVideo(video)
@@ -704,6 +764,7 @@ function MainStreamNestApp() {
           isDesktopMode={isDesktopMode}
           isPipActive={isPipActive}
           isHidden={isCleanMode}
+          isBackgroundAudioEnabled={backgroundPlayEnabled}
           onToggleHide={() => setIsCleanMode(!isCleanMode)}
           onNavigate={handleNavigate}
           onBack={() => browserRef.current?.goBack()}
@@ -716,6 +777,8 @@ function MainStreamNestApp() {
           onOpenSettings={() => setShowSettingsModal(true)}
           onToggleCinemaMode={() => setIsCinemaMode(!isCinemaMode)}
           onTriggerPip={() => handleTogglePip()}
+          onToggleBackgroundAudio={handleToggleBackgroundAudio}
+          onSkipNext={handleSkipNext}
         />
       )}
 
@@ -766,6 +829,26 @@ function MainStreamNestApp() {
                 >
                   <Tv size={11} color="#06070a" />
                   <Text style={styles.sniffedCinemaText}>Cinema</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (sniffedStream?.sourceUrl) {
+                      dismissedStreamUrlsRef.current.add(sniffedStream.sourceUrl)
+                    }
+                    setActiveVideo(sniffedStream)
+                    setBackgroundPlayEnabled(true)
+                    backgroundAudio.setBackgroundPlayEnabled(true)
+                    const title = sniffedStream.title || 'Web Video Stream'
+                    const subtitle = currentUrl.replace(/^https?:\/\//, '').split('/')[0]
+                    backgroundAudio.startKeepAlive(title, subtitle)
+                    backgroundAudio.updatePlaybackState(true, title, subtitle)
+                    setSniffedStream(null)
+                  }}
+                  style={styles.sniffedAudioBtn}
+                >
+                  <Headphones size={11} color="#06070a" />
+                  <Text style={styles.sniffedAudioText}>Audio</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1102,6 +1185,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sniffedCinemaText: {
+    color: '#06070a',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  sniffedAudioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10b981',
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  sniffedAudioText: {
     color: '#06070a',
     fontSize: 10,
     fontWeight: '700',

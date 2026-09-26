@@ -27,6 +27,7 @@ class MainActivity : ReactActivity() {
 
   companion object {
     const val ACTION_PIP_PLAY_PAUSE = "com.streamnest.app.ACTION_PIP_PLAY_PAUSE"
+    const val ACTION_PIP_NEXT = "com.streamnest.app.ACTION_PIP_NEXT"
 
     @Volatile
     var isVideoPlaying: Boolean = false
@@ -40,6 +41,9 @@ class MainActivity : ReactActivity() {
     fun createPipActions(context: Context, isPlaying: Boolean): List<RemoteAction> {
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyList()
       try {
+        val actions = mutableListOf<RemoteAction>()
+
+        // 1. Play / Pause Action
         val iconRes = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         val title = if (isPlaying) "Pause" else "Play"
         val intent = Intent(ACTION_PIP_PLAY_PAUSE).setPackage(context.packageName)
@@ -49,9 +53,24 @@ class MainActivity : ReactActivity() {
           intent,
           PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val icon = Icon.createWithResource(context, iconRes)
-        val action = RemoteAction(icon, title, title, pendingIntent)
-        return listOf(action)
+        actions.add(RemoteAction(Icon.createWithResource(context, iconRes), title, title, pendingIntent))
+
+        // 2. Next Video Action
+        val nextIntent = Intent(ACTION_PIP_NEXT).setPackage(context.packageName)
+        val nextPendingIntent = PendingIntent.getBroadcast(
+          context,
+          102,
+          nextIntent,
+          PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        actions.add(RemoteAction(
+          Icon.createWithResource(context, android.R.drawable.ic_media_next),
+          "Next",
+          "Next",
+          nextPendingIntent
+        ))
+
+        return actions
       } catch (e: Exception) {
         return emptyList()
       }
@@ -118,6 +137,22 @@ class MainActivity : ReactActivity() {
             wv.evaluateJavascript(script, null)
           }
         }
+      } else if (intent?.action == ACTION_PIP_NEXT) {
+        BraveWebView.activeWebView?.get()?.let { wv ->
+          wv.post {
+            val script = "(function(){ var yt=document.getElementById('movie_player')||document.getElementById('player')||document.querySelector('.html5-video-player'); if(yt&&typeof yt.nextVideo==='function'){yt.nextVideo();return;} var nextBtn=document.querySelector('.ytp-next-button, button[aria-label=\"Next video\"], button[aria-label=\"Next (SHIFT+n)\"], button.ytp-next-button'); if(nextBtn){nextBtn.click();return;} var genericNext=document.querySelector('[data-action=\"next\"], .next-button, .vjs-next-control'); if(genericNext){genericNext.click();return;} var v=document.querySelector('video'); if(v&&isFinite(v.duration)&&v.duration>0){v.currentTime=Math.max(0,v.duration-0.5);} })();"
+            wv.evaluateJavascript(script, null)
+          }
+        }
+        try {
+          val reactApp = application as? com.facebook.react.ReactApplication
+          val reactContext = reactApp?.reactNativeHost?.reactInstanceManager?.currentReactContext
+          reactContext
+            ?.getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            ?.emit("onNotificationMediaAction", "next")
+        } catch (e: Exception) {
+          // Ignore
+        }
       }
     }
   }
@@ -132,7 +167,10 @@ class MainActivity : ReactActivity() {
     updatePipState(this, false, false, null)
 
     try {
-      val filter = IntentFilter(ACTION_PIP_PLAY_PAUSE)
+      val filter = IntentFilter().apply {
+        addAction(ACTION_PIP_PLAY_PAUSE)
+        addAction(ACTION_PIP_NEXT)
+      }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         registerReceiver(pipActionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
       } else {
@@ -190,6 +228,18 @@ class MainActivity : ReactActivity() {
     newConfig: Configuration
   ) {
     super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+    if (isInPictureInPictureMode) {
+      BraveWebView.activeWebView?.get()?.let { wv ->
+        wv.post {
+          try {
+            wv.onResume()
+            wv.resumeTimers()
+            val script = "(function(){ var yt=document.getElementById('movie_player')||document.getElementById('player')||document.querySelector('.html5-video-player'); if(yt&&typeof yt.playVideo==='function'){yt.playVideo();} var v=document.querySelector('video'); if(v&&v.paused){v.play().catch(function(){});} })();"
+            wv.evaluateJavascript(script, null)
+          } catch (e: Exception) {}
+        }
+      }
+    }
     try {
       val reactContext = reactInstanceManager?.currentReactContext
       if (reactContext != null) {

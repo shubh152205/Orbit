@@ -17,3 +17,4 @@ web-build/
 .next/
 .DS_Store
 *.log
+*.apk

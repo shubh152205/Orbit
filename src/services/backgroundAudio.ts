@@ -21,7 +21,7 @@ class BackgroundAudioService {
    * keeping the CPU awake and Chromium's audio decoder alive when screen is off or app is backgrounded.
    */
   async startKeepAlive(
-    title: string = 'StreamNest Media Playback',
+    title: string = 'Orbit Media Playback',
     subtitle: string = 'Streaming in background'
   ): Promise<void> {
     if (this.isKeepAliveActive) return

@@ -31,6 +31,8 @@ import {
   Check,
   Eye,
   EyeOff,
+  Headphones,
+  SkipForward,
 } from 'lucide-react-native'
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -52,6 +54,7 @@ export interface LiquidGlassNavBarProps {
   isDesktopMode?: boolean
   isPipActive?: boolean
   isHidden?: boolean
+  isBackgroundAudioEnabled?: boolean
   onToggleHide?: () => void
   onNavigate: (url: string) => void
   onBack?: () => void
@@ -64,6 +67,8 @@ export interface LiquidGlassNavBarProps {
   onOpenSettings?: () => void
   onToggleCinemaMode?: () => void
   onTriggerPip?: () => void
+  onToggleBackgroundAudio?: () => void
+  onSkipNext?: () => void
 }
 
 /**
@@ -103,6 +108,9 @@ export function LiquidGlassNavBar({
   onOpenSettings,
   onToggleCinemaMode,
   onTriggerPip,
+  isBackgroundAudioEnabled = true,
+  onToggleBackgroundAudio,
+  onSkipNext,
 }: LiquidGlassNavBarProps) {
   const insets = useSafeAreaInsets()
   const [internalHidden, setInternalHidden] = useState(false)
@@ -411,6 +419,7 @@ export function LiquidGlassNavBar({
             }
             style={StyleSheet.absoluteFillObject}
           />
+          {/* Row 1: Media & Stream Controls */}
           <View style={styles.quickMenuRow}>
             {/* System PiP Trigger */}
             <TouchableOpacity
@@ -438,6 +447,44 @@ export function LiquidGlassNavBar({
               <Text style={[styles.quickMenuLabel, { color: textColor }]}>Cinema</Text>
             </TouchableOpacity>
 
+            {/* Background Audio Mode Toggle */}
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => {
+                onToggleBackgroundAudio?.()
+              }}
+              style={styles.quickMenuItem}
+            >
+              <Headphones
+                size={16}
+                color={isBackgroundAudioEnabled ? '#10b981' : textMutedColor}
+              />
+              <Text
+                style={[
+                  styles.quickMenuLabel,
+                  { color: isBackgroundAudioEnabled ? '#10b981' : textColor },
+                ]}
+              >
+                {isBackgroundAudioEnabled ? 'Audio ON' : 'Audio Mode'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Skip to Next Video */}
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => {
+                setShowQuickMenu(false)
+                onSkipNext?.()
+              }}
+              style={styles.quickMenuItem}
+            >
+              <SkipForward size={16} color={textColor} />
+              <Text style={[styles.quickMenuLabel, { color: textColor }]}>Next Video</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Row 2: Browser Tools & Shortcuts */}
+          <View style={[styles.quickMenuRow, { marginTop: 8 }]}>
             {/* Portals Hub */}
             <TouchableOpacity
               activeOpacity={0.75}
