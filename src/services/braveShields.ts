@@ -325,9 +325,10 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
     '.video-ads',
     '.ytp-ad-module'
   ].join(', ') + ' { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; height: 0 !important; }'
-  + ' #player:not([style*="fixed"]) .html5-video-player, #player-container-id .html5-video-player { width: 100% !important; }'
-  + ' #player:not([style*="fixed"]) .html5-video-container, #player-container-id .html5-video-container { width: 100% !important; height: 100% !important; }'
-  + ' #player:not([style*="fixed"]) video.video-stream, #player-container-id video.video-stream { width: 100% !important; height: 100% !important; top: 0 !important; left: 0 !important; object-fit: contain !important; }';
+  + ' #player:not([style*="fixed"]), #player-container-id:not([style*="fixed"]) { width: 100% !important; }'
+  + ' .html5-video-player:not([style*="fixed"]) { width: 100% !important; height: 100% !important; }'
+  + ' .html5-video-container:not([style*="fixed"]) { width: 100% !important; height: 100% !important; }'
+  + ' .html5-video-player:not([style*="fixed"]) video.video-stream { width: 100% !important; height: 100% !important; top: 0 !important; left: 0 !important; object-fit: contain !important; }';
 
   var styleEl = document.createElement('style');
   styleEl.type = 'text/css';
@@ -414,10 +415,6 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
       if (player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'))) {
         isAdActive = true;
       }
-      var adOverlay = document.querySelector('.ytp-ad-player-overlay, .ytp-ad-overlay-container, .ytp-ad-text, .video-ads .ad-container');
-      if (adOverlay && adOverlay.offsetParent !== null) {
-        isAdActive = true;
-      }
 
       var video = document.querySelector('video');
 
@@ -437,8 +434,7 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
           try { player.skipAd(); } catch(e) {}
         }
 
-        // STRICT FIX: Only fast-forward and jump if the stream is an actual ad clip (duration <= 120s)
-        // NEVER advance currentTime on the main video (duration > 120s), which caused black screen on startup
+        // STRICT FIX: Only fast-forward and jump if the stream is an actual ad clip
         if (isFinite(video.duration) && video.duration > 0 && video.duration <= 120) {
           if (!wasAdActive) {
             wasAdActive = true;
@@ -456,6 +452,11 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
           video.muted = prevMutedState;
         }
         reportBlock(1);
+      } else if (video && video.paused && !video.ended && video.currentTime === 0 && !window.__orbit_user_paused) {
+        // Auto-resume video if it was stalled or stuck paused at 0:00 without user interaction
+        if (player && typeof player.playVideo === 'function' && !player.classList.contains('ad-showing')) {
+          player.playVideo();
+        }
       }
     } catch(e) {}
   }
@@ -488,14 +489,18 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
     defProp(document, 'webkitHidden', false);
     defProp(document, 'webkitVisibilityState', 'visible');
 
-    // Drop auto-pause event listeners so web players don't pause on minimize/lock
-    var blockedEventNames = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'focusout', 'pagehide'];
+    // Bypass disablePictureInPicture restrictions on YouTube mobile
+    defProp(HTMLVideoElement.prototype, 'disablePictureInPicture', false);
+    defProp(HTMLMediaElement.prototype, 'disablePictureInPicture', false);
+    defProp(document, 'pictureInPictureEnabled', true);
+    defProp(Document.prototype, 'pictureInPictureEnabled', true);
+
+    // Drop auto-pause event listeners across all targets
+    var blockedEventNames = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'focusout', 'pagehide', 'freeze'];
     var origAEL = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function(type, listener, options) {
       if (typeof type === 'string' && blockedEventNames.indexOf(type.toLowerCase()) !== -1) {
-        if (this === window || this === document) {
-          return;
-        }
+        return;
       }
       return origAEL.call(this, type, listener, options);
     };
@@ -531,16 +536,60 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
       }
     } catch(e) {}
 
-    // Reinforce playsinline attributes on HTML5 media elements
+    // User interaction tracking to distinguish deliberate pause taps from YouTube background auto-pauses
+    var __lastUserTouchTime = 0;
+    var __markUserTouch = function() { __lastUserTouchTime = Date.now(); };
+    var touchEvents = ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'];
+    for (var ti = 0; ti < touchEvents.length; ti++) {
+      window.addEventListener(touchEvents[ti], __markUserTouch, true);
+    }
+
+    var origMediaPause = HTMLMediaElement.prototype.pause;
+    window.__orbit_orig_pause = origMediaPause;
+    HTMLMediaElement.prototype.pause = function() {
+      var isUserAction = (Date.now() - __lastUserTouchTime) < 1000;
+      if (window.__orbit_user_paused || isUserAction) {
+        return origMediaPause.apply(this, arguments);
+      }
+      return;
+    };
+
+    var hookYtPlayer = function(p) {
+      if (p && !p.__orbit_hooked) {
+        p.__orbit_hooked = true;
+        if (typeof p.pauseVideo === 'function') {
+          var origPv = p.pauseVideo;
+          p.pauseVideo = function() {
+            var isUserAction = (Date.now() - __lastUserTouchTime) < 1000;
+            if (window.__orbit_user_paused || isUserAction) {
+              return origPv.apply(this, arguments);
+            }
+            return;
+          };
+        }
+      }
+    };
+
+    // Reinforce playsinline and PiP enablement attributes
     function keepMediaActive() {
       var medias = document.querySelectorAll('video, audio');
       for (var i = 0; i < medias.length; i++) {
         var m = medias[i];
         if (!m.hasAttribute('playsinline')) m.setAttribute('playsinline', '');
         if (!m.hasAttribute('webkit-playsinline')) m.setAttribute('webkit-playsinline', '');
+        if (m.hasAttribute('disablepictureinpicture')) m.removeAttribute('disablepictureinpicture');
+        if (m.disablePictureInPicture) m.disablePictureInPicture = false;
+        if (window.__orbit_pip_active && !window.__orbit_user_paused && m.paused) {
+          m.play().catch(function(){});
+        }
+      }
+      var p = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
+      hookYtPlayer(p);
+      if (window.__orbit_pip_active && !window.__orbit_user_paused && p && typeof p.playVideo === 'function') {
+        try { p.playVideo(); } catch(e) {}
       }
     }
-    setInterval(keepMediaActive, 2000);
+    setInterval(keepMediaActive, 1000);
   } catch(e) {}
 
   document.addEventListener('DOMContentLoaded', function() {
@@ -591,14 +640,18 @@ export const BACKGROUND_PLAY_EARLY_JS = `
     def(document, 'webkitHidden', false);
     def(document, 'webkitVisibilityState', 'visible');
 
-    // 2. Drop auto-pause event listeners so web players don't pause on minimize/lock
-    var blockedList = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'focusout', 'pagehide'];
+    // 2. Defuse disablePictureInPicture property and attributes (YouTube mobile restrictions)
+    def(HTMLVideoElement.prototype, 'disablePictureInPicture', false);
+    def(HTMLMediaElement.prototype, 'disablePictureInPicture', false);
+    def(document, 'pictureInPictureEnabled', true);
+    def(Document.prototype, 'pictureInPictureEnabled', true);
+
+    // 3. Drop auto-pause event listeners so web players don't pause on minimize/lock/PiP
+    var blockedList = ['visibilitychange', 'webkitvisibilitychange', 'blur', 'focusout', 'pagehide', 'freeze'];
     var originalAddEventListener = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function(type, listener, options) {
       if (typeof type === 'string' && blockedList.indexOf(type.toLowerCase()) !== -1) {
-        if (this === window || this === document) {
-          return;
-        }
+        return;
       }
       return originalAddEventListener.call(this, type, listener, options);
     };
@@ -611,7 +664,7 @@ export const BACKGROUND_PLAY_EARLY_JS = `
       document.hasFocus = function() { return true; };
     } catch(e) {}
 
-    // Spoof IntersectionObserver so video elements never trigger paused state on scroll or blur
+    // 4. Spoof IntersectionObserver so video elements never trigger paused state on scroll or blur
     try {
       var OrigIntersectionObserver = window.IntersectionObserver;
       if (OrigIntersectionObserver) {
@@ -632,35 +685,59 @@ export const BACKGROUND_PLAY_EARLY_JS = `
         PatchedIntersectionObserver.prototype = OrigIntersectionObserver.prototype;
         window.IntersectionObserver = PatchedIntersectionObserver;
       }
-    // 3. PIP & BACKGROUND PLAYBACK CONTINUITY GUARD:
-    // Suppress unwanted automatic pauses triggered by browser resize or visibility changes during PiP
-    try {
-      var origMediaPause = HTMLMediaElement.prototype.pause;
-      window.__orbit_orig_pause = origMediaPause;
-      HTMLMediaElement.prototype.pause = function() {
-        if (window.__orbit_pip_active && !window.__orbit_user_paused) {
-          return;
-        }
-        return origMediaPause.apply(this, arguments);
-      };
+    } catch(e) {}
 
-      var hookYtPlayer = function(p) {
-        if (p && typeof p.pauseVideo === 'function' && !p.__orbit_hooked) {
-          p.__orbit_hooked = true;
+    // 5. USER-INTERACTION-AWARE PAUSE DEFUSER:
+    // Distinguish genuine user pause taps from programmatic auto-pauses (YouTube background watchdog / PiP minimize)
+    var __lastUserTouchTime = 0;
+    var __markUserTouch = function() { __lastUserTouchTime = Date.now(); };
+    var touchEvents = ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'];
+    for (var ti = 0; ti < touchEvents.length; ti++) {
+      window.addEventListener(touchEvents[ti], __markUserTouch, true);
+    }
+
+    var origMediaPause = HTMLMediaElement.prototype.pause;
+    window.__orbit_orig_pause = origMediaPause;
+    HTMLMediaElement.prototype.pause = function() {
+      var isRecentUserTouch = (Date.now() - __lastUserTouchTime) < 1000;
+      if (window.__orbit_user_paused || isRecentUserTouch) {
+        return origMediaPause.apply(this, arguments);
+      }
+      return;
+    };
+
+    var hookYtPlayer = function(p) {
+      if (p && !p.__orbit_hooked) {
+        p.__orbit_hooked = true;
+        if (typeof p.pauseVideo === 'function') {
           var origPv = p.pauseVideo;
           p.pauseVideo = function() {
-            if (window.__orbit_pip_active && !window.__orbit_user_paused) {
-              return;
+            var isRecentUserTouch = (Date.now() - __lastUserTouchTime) < 1000;
+            if (window.__orbit_user_paused || isRecentUserTouch) {
+              return origPv.apply(this, arguments);
             }
-            return origPv.apply(this, arguments);
+            return;
           };
         }
-      };
-      setInterval(function() {
-        var p = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
-        hookYtPlayer(p);
-      }, 1000);
-    } catch(e) {}
+      }
+    };
+
+    setInterval(function() {
+      var p = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
+      hookYtPlayer(p);
+      var v = document.querySelector('video');
+      if (v) {
+        if (v.hasAttribute('disablepictureinpicture')) v.removeAttribute('disablepictureinpicture');
+        if (v.disablePictureInPicture) v.disablePictureInPicture = false;
+        if (window.__orbit_pip_active && !window.__orbit_user_paused && v.paused) {
+          v.play().catch(function() {});
+          if (p && typeof p.playVideo === 'function') {
+            try { p.playVideo(); } catch(e) {}
+          }
+        }
+      }
+    }, 500);
+
   } catch (err) {}
 })();
 true;
