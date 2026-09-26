@@ -9,6 +9,7 @@ import {
   Modal,
   Platform,
   Alert,
+  Image,
   useColorScheme,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -240,9 +241,16 @@ export function NativeHomeScreen({
       <SafeAreaView style={[styles.modalRoot, { backgroundColor: colors.canvas }]}>
         {/* Header */}
         <View style={[styles.headerRow, { borderBottomColor: colors.borderSubtle }]}>
-          <View style={styles.headerTitleCol}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Favorites</Text>
-            <Text style={[styles.headerSub, { color: colors.textSecondary }]}>Quick Access & Bookmarks</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Image
+              source={require('../../assets/orbit-logo.png')}
+              style={{ width: 34, height: 34, borderRadius: 17 }}
+              resizeMode="cover"
+            />
+            <View style={styles.headerTitleCol}>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Orbit Portals</Text>
+              <Text style={[styles.headerSub, { color: colors.textSecondary }]}>Quick Access & Bookmarks</Text>
+            </View>
           </View>
 
           <TouchableOpacity

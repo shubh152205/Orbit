@@ -8,6 +8,7 @@ import {
   ScrollView,
   LayoutAnimation,
   Platform,
+  Image,
   UIManager,
 } from 'react-native'
 import {
@@ -206,23 +207,23 @@ export function LiquidDynamicIsland({
           {
             top: effectiveTop,
             alignItems: 'flex-end',
-            paddingRight: 14,
+            paddingRight: 0,
+            right: 0,
           },
         ]}
         pointerEvents="box-none"
       >
         <TouchableOpacity
-          activeOpacity={0.75}
+          activeOpacity={0.8}
           onPress={() => toggleMinimize(false)}
           accessibilityLabel="Show Island"
+          hitSlop={{ top: 15, bottom: 15, left: 20, right: 10 }}
         >
-          <LiquidGlassContainer
-            type="circle"
-            variant="floating"
-            style={styles.microCircleGlass}
-          >
-            <Maximize2 size={16} color="#ffffff" strokeWidth={2} />
-          </LiquidGlassContainer>
+          <Image
+            source={require('../../assets/peeking-cat.png')}
+            style={{ width: 44, height: 118 }}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
       </View>
     )

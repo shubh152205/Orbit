@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
   Animated,
+  Image,
   Keyboard,
   LayoutAnimation,
   UIManager,
@@ -116,14 +117,44 @@ export function LiquidGlassNavBar({
   const [internalHidden, setInternalHidden] = useState(false)
   const isBarHidden = isHidden !== undefined ? isHidden : internalHidden
 
+  // Peeking cat spring physics animation
+  const catAnimTranslateX = useRef(new Animated.Value(50)).current
+
+  useEffect(() => {
+    if (isBarHidden) {
+      catAnimTranslateX.setValue(50)
+      Animated.spring(catAnimTranslateX, {
+        toValue: 0,
+        friction: 5,
+        tension: 90,
+        useNativeDriver: true,
+      }).start()
+    }
+  }, [isBarHidden])
+
   const handleToggleHide = () => {
     try {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
     } catch {}
-    if (onToggleHide) {
-      onToggleHide()
+    if (isBarHidden) {
+      Animated.timing(catAnimTranslateX, {
+        toValue: 50,
+        duration: 160,
+        useNativeDriver: true,
+      }).start(() => {
+        if (onToggleHide) {
+          onToggleHide()
+        } else {
+          setInternalHidden(false)
+        }
+      })
     } else {
-      setInternalHidden((prev) => !prev)
+      if (onToggleHide) {
+        onToggleHide()
+      } else {
+        setInternalHidden(true)
+      }
+      setShowQuickMenu(false)
     }
   }
 
@@ -214,36 +245,30 @@ export function LiquidGlassNavBar({
 
   if (isBarHidden) {
     return (
-      <View style={[styles.minimizedContainer, { top: topPosition }]} pointerEvents="box-none">
+      <Animated.View
+        style={[
+          styles.catWrapper,
+          {
+            top: topPosition + 2,
+            transform: [{ translateX: catAnimTranslateX }],
+          },
+        ]}
+        pointerEvents="box-none"
+      >
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={handleToggleHide}
           accessibilityLabel="Show Browser Bar"
-          style={styles.minimizedTouch}
+          style={styles.catTouch}
+          hitSlop={{ top: 15, bottom: 15, left: 20, right: 10 }}
         >
-          <View
-            style={[
-              styles.minimizedPill,
-              {
-                backgroundColor: glassBackground,
-                borderColor: glassBorder,
-              },
-            ]}
-          >
-            <BlurView
-              intensity={75}
-              tint={
-                isDark
-                  ? (Platform.OS === 'ios' ? ('systemUltraThinMaterialDark' as any) : 'dark')
-                  : (Platform.OS === 'ios' ? ('systemUltraThinMaterialLight' as any) : 'light')
-              }
-              style={StyleSheet.absoluteFillObject}
-            />
-            <Eye size={14} color={accentColor} style={styles.minimizedIcon} />
-            <Text style={[styles.minimizedText, { color: textColor }]}>Show</Text>
-          </View>
+          <Image
+            source={require('../../assets/peeking-cat.png')}
+            style={styles.peekingCatImage}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     )
   }
 
@@ -688,34 +713,24 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
-  minimizedContainer: {
+  catWrapper: {
     position: 'absolute',
-    right: 14,
-    zIndex: 9999,
+    right: 0,
+    zIndex: 99999,
   },
-  minimizedTouch: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  minimizedPill: {
-    height: 36,
-    paddingHorizontal: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
+  catTouch: {
+    alignItems: 'flex-end',
     justifyContent: 'center',
+    paddingRight: 0,
+    marginRight: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: -2, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 10,
   },
-  minimizedIcon: {
-    marginRight: 6,
-  },
-  minimizedText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: -0.2,
+  peekingCatImage: {
+    width: 44,
+    height: 118,
   },
 })

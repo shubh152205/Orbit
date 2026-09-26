@@ -9,6 +9,7 @@ import {
   ScrollView,
   Platform,
   Alert,
+  Image,
 } from 'react-native'
 import {
   Settings,
@@ -86,10 +87,12 @@ export function NativeSettingsModal({
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.titleRow}>
-                <View style={styles.iconBox}>
-                  <Settings size={15} color="#f8fafc" />
-                </View>
-                <Text style={styles.title}>Settings</Text>
+                <Image
+                  source={require('../../assets/orbit-logo.png')}
+                  style={{ width: 28, height: 28, borderRadius: 14 }}
+                  resizeMode="cover"
+                />
+                <Text style={styles.title}>Orbit Settings</Text>
               </View>
               <LiquidGlassButton
                 type="circle"

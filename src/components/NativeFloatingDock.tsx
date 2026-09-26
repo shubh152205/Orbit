@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   Platform,
+  Image,
 } from 'react-native'
 import {
   Compass,
@@ -51,9 +52,13 @@ export function NativeFloatingDock({
           onPress={() => setIsCollapsed(false)}
         >
           <LiquidGlassContainer type="pill" variant="floating" style={styles.collapsedPearl}>
-            <View style={styles.pearlGlowDot} />
+            <Image
+              source={require('../../assets/orbit-logo.png')}
+              style={{ width: 16, height: 16, borderRadius: 8, marginRight: 4 }}
+              resizeMode="cover"
+            />
             <Text style={styles.pearlText}>Orbit</Text>
-            <Maximize2 size={12} color={THEME.colors.textSecondary} />
+            <Maximize2 size={12} color={THEME.colors.textSecondary} style={{ marginLeft: 2 }} />
           </LiquidGlassContainer>
         </TouchableOpacity>
       </View>
