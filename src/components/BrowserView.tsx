@@ -133,12 +133,13 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
 
           function isMainVideo(v) {
             if (!v) return false;
-            var rect = v.getBoundingClientRect();
-            // Video element must have visible layout dimensions
-            if (rect.width < 160 || rect.height < 90) return false;
+            if (window.__orbit_pip_active) return true;
 
-            // YouTube specific: filter out feed auto-play preview snippets
+            // YouTube specific: prioritize main player container
             if (window.location.hostname.indexOf('youtube.com') !== -1) {
+              if (v.closest('#player') || v.closest('#player-container-id') || v.closest('.html5-video-player')) {
+                return true;
+              }
               var isWatchPage = window.location.pathname.indexOf('/watch') !== -1 ||
                                 window.location.pathname.indexOf('/shorts') !== -1 ||
                                 window.location.pathname.indexOf('/live') !== -1;
@@ -151,6 +152,9 @@ export const BrowserView = forwardRef<BrowserViewRef, BrowserViewProps>(
                 }
               }
             }
+            var rect = v.getBoundingClientRect();
+            // Video element must have visible layout dimensions
+            if (rect.width < 60 || rect.height < 40) return false;
             return true;
           }
 

@@ -60,11 +60,16 @@ class BraveShieldsWebViewClient(private val reactContext: ReactContext?) : RNCWe
                     BraveShieldsModule.sendAdBlockedEvent(ctx, url, host, resourceType, total)
                 }
 
-                // Return empty WebResourceResponse to immediately terminate the request
+                // Return safe WebResourceResponse: return "{}" for JSON/XHR endpoints to prevent JSON.parse syntax crashes
+                val acceptHeader = request.requestHeaders?.get("Accept")?.lowercase() ?: ""
+                val isJson = resourceType == "xhr" || url.contains("json") || url.contains("youtubei") || acceptHeader.contains("application/json")
+                val mimeType = if (isJson) "application/json" else if (resourceType == "script") "application/javascript" else "text/plain"
+                val responseBytes = if (isJson) "{}".toByteArray(Charsets.UTF_8) else ByteArray(0)
+
                 return WebResourceResponse(
-                    "text/plain",
+                    mimeType,
                     "UTF-8",
-                    ByteArrayInputStream(ByteArray(0))
+                    ByteArrayInputStream(responseBytes)
                 )
             }
         } catch (t: Throwable) {

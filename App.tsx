@@ -210,6 +210,8 @@ function MainStreamNestApp() {
         if (inPip) {
           browserRef.current?.injectJavaScript(`
             (function() {
+              window.__orbit_pip_active = true;
+              window.__orbit_user_paused = false;
               var s = document.getElementById('__streamnest_island_spacer');
               if (s) s.style.display = 'none';
               var v = document.querySelector('video');
@@ -227,38 +229,64 @@ function MainStreamNestApp() {
               style.textContent = 'html, body { overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; width: 100vw !important; height: 100vh !important; } ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer, #below, .watch-below-the-player, #related, #comments, ytm-item-section-renderer, header, nav, footer, .player-controls-bottom, .ytp-chrome-top, .ytp-chrome-bottom { display: none !important; } #player, #player-container-id, .player-container, .html5-video-player, .html5-video-container { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; margin: 0 !important; padding: 0 !important; z-index: 2147483646 !important; background: #000 !important; } video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; max-width: 100vw !important; max-height: 100vh !important; z-index: 2147483647 !important; object-fit: contain !important; background: #000 !important; }';
 
               // Ensure video keeps playing smoothly during and after entering PiP mode
-              var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
-              if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
-              if (v && v.paused) { v.play().catch(function(){}); }
-              setTimeout(function() {
+              var playMedia = function() {
+                var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
                 if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
                 if (v && v.paused) { v.play().catch(function(){}); }
-              }, 250);
-              setTimeout(function() {
-                if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
-                if (v && v.paused) { v.play().catch(function(){}); }
-              }, 600);
+              };
+              playMedia();
+              setTimeout(playMedia, 250);
+              setTimeout(playMedia, 600);
+              setTimeout(playMedia, 1200);
             })();
             true;
           `)
         } else {
           browserRef.current?.injectJavaScript(`
             (function() {
+              window.__orbit_pip_active = false;
               var s = document.getElementById('__streamnest_island_spacer');
               if (s) s.style.display = 'block';
               var style = document.getElementById('__streamnest_pip_style');
               if (style) style.remove();
+
+              // Clear stuck inline dimensions left by PiP resize to fix player shrinkage bug
+              var targets = document.querySelectorAll('#player, #player-container-id, .player-container, .html5-video-player, .html5-video-container, video');
+              for (var i = 0; i < targets.length; i++) {
+                var el = targets[i];
+                if (el) {
+                  el.style.width = '';
+                  el.style.height = '';
+                  el.style.top = '';
+                  el.style.left = '';
+                  el.style.position = '';
+                  el.style.maxWidth = '';
+                  el.style.maxHeight = '';
+                  el.style.zIndex = '';
+                }
+              }
+
               if (window.__streamnest_pip_saved_scroll) {
                 window.scrollTo(window.__streamnest_pip_saved_scroll.x, window.__streamnest_pip_saved_scroll.y);
               }
               window.dispatchEvent(new Event('resize'));
+              window.dispatchEvent(new Event('orientationchange'));
             })();
             true;
           `)
         }
       }
     )
-    return () => sub.remove()
+
+    const audioSub = DeviceEventEmitter.addListener('onPipAudioModeTriggered', () => {
+      setBackgroundPlayEnabled(true)
+      setIsPipActive(false)
+    })
+
+    return () => {
+      sub.remove()
+      audioSub.remove()
+    }
   }, [])
 
   // Skip to next video on YouTube or generic HTML5 media
@@ -289,6 +317,7 @@ function MainStreamNestApp() {
           } else {
             browserRef.current?.injectJavaScript(`
               (function() {
+                window.__orbit_user_paused = false;
                 var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
                 if (yt && typeof yt.playVideo === 'function') { yt.playVideo(); }
                 var v = document.querySelector('video');
@@ -307,10 +336,14 @@ function MainStreamNestApp() {
           } else {
             browserRef.current?.injectJavaScript(`
               (function() {
+                window.__orbit_user_paused = true;
                 var yt = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
                 if (yt && typeof yt.pauseVideo === 'function') { yt.pauseVideo(); }
                 var v = document.querySelector('video');
-                if (v && !v.paused) v.pause();
+                if (v && !v.paused) {
+                  if (window.__orbit_orig_pause) { window.__orbit_orig_pause.call(v); }
+                  else { v.pause(); }
+                }
                 var btn = document.querySelector('button.player-control-play-pause-icon, .ytp-play-button, button[aria-label="Pause video"]');
                 if (btn) btn.click();
               })();

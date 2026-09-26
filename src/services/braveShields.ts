@@ -257,8 +257,19 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
   // 2.5 YOUTUBE INNERTUBE AD DEFUSER: Neutralize adPlacements and adSlots in JSON responses
   try {
     var origJSONParse = JSON.parse;
-    JSON.parse = function() {
-      var r = origJSONParse.apply(this, arguments);
+    JSON.parse = function(text, reviver) {
+      if (typeof text === 'string' && text.trim() === '') {
+        return {};
+      }
+      var r;
+      try {
+        r = origJSONParse.apply(this, arguments);
+      } catch (err) {
+        if (typeof text === 'string' && (text.indexOf('ad') !== -1 || text.indexOf('break') !== -1)) {
+          return {};
+        }
+        throw err;
+      }
       if (r && typeof r === 'object') {
         if (r.adPlacements) delete r.adPlacements;
         if (r.playerAds) delete r.playerAds;
@@ -313,7 +324,10 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
     'yt-mealbar-promo-renderer',
     '.video-ads',
     '.ytp-ad-module'
-  ].join(', ') + ' { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; height: 0 !important; }';
+  ].join(', ') + ' { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; height: 0 !important; }'
+  + ' #player:not([style*="fixed"]) .html5-video-player, #player-container-id .html5-video-player { width: 100% !important; }'
+  + ' #player:not([style*="fixed"]) .html5-video-container, #player-container-id .html5-video-container { width: 100% !important; height: 100% !important; }'
+  + ' #player:not([style*="fixed"]) video.video-stream, #player-container-id video.video-stream { width: 100% !important; height: 100% !important; top: 0 !important; left: 0 !important; object-fit: contain !important; }';
 
   var styleEl = document.createElement('style');
   styleEl.type = 'text/css';
@@ -408,19 +422,6 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
       var video = document.querySelector('video');
 
       if (isAdActive && video) {
-        if (!wasAdActive) {
-          wasAdActive = true;
-          prevMutedState = video.muted;
-        }
-
-        // Mute and fast-forward the advertisement
-        video.muted = true;
-        video.playbackRate = 16.0;
-
-        if (isFinite(video.duration) && video.duration > 0) {
-          video.currentTime = video.duration;
-        }
-
         // Auto-click any available skip button
         var skipBtn = document.querySelector(
           '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-slot button, button.ytp-ad-skip-button-text, .videoAdUiSkipButton, button[class*="skip-button"]'
@@ -431,7 +432,23 @@ export const BRAVE_SHIELDS_INJECTED_JS = `
             reportBlock(1);
           } catch(e) {}
         }
-      } else if (wasAdActive) {
+
+        if (player && typeof player.skipAd === 'function') {
+          try { player.skipAd(); } catch(e) {}
+        }
+
+        // STRICT FIX: Only fast-forward and jump if the stream is an actual ad clip (duration <= 120s)
+        // NEVER advance currentTime on the main video (duration > 120s), which caused black screen on startup
+        if (isFinite(video.duration) && video.duration > 0 && video.duration <= 120) {
+          if (!wasAdActive) {
+            wasAdActive = true;
+            prevMutedState = video.muted;
+          }
+          video.muted = true;
+          video.playbackRate = 16.0;
+          video.currentTime = video.duration;
+        }
+      } else if (wasAdActive || (video && video.playbackRate > 2.0)) {
         // Ad has finished: IMMEDIATELY RESTORE NORMAL SPEED AND UNMUTE
         wasAdActive = false;
         if (video) {
@@ -615,6 +632,34 @@ export const BACKGROUND_PLAY_EARLY_JS = `
         PatchedIntersectionObserver.prototype = OrigIntersectionObserver.prototype;
         window.IntersectionObserver = PatchedIntersectionObserver;
       }
+    // 3. PIP & BACKGROUND PLAYBACK CONTINUITY GUARD:
+    // Suppress unwanted automatic pauses triggered by browser resize or visibility changes during PiP
+    try {
+      var origMediaPause = HTMLMediaElement.prototype.pause;
+      window.__orbit_orig_pause = origMediaPause;
+      HTMLMediaElement.prototype.pause = function() {
+        if (window.__orbit_pip_active && !window.__orbit_user_paused) {
+          return;
+        }
+        return origMediaPause.apply(this, arguments);
+      };
+
+      var hookYtPlayer = function(p) {
+        if (p && typeof p.pauseVideo === 'function' && !p.__orbit_hooked) {
+          p.__orbit_hooked = true;
+          var origPv = p.pauseVideo;
+          p.pauseVideo = function() {
+            if (window.__orbit_pip_active && !window.__orbit_user_paused) {
+              return;
+            }
+            return origPv.apply(this, arguments);
+          };
+        }
+      };
+      setInterval(function() {
+        var p = document.getElementById('movie_player') || document.getElementById('player') || document.querySelector('.html5-video-player');
+        hookYtPlayer(p);
+      }, 1000);
     } catch(e) {}
   } catch (err) {}
 })();

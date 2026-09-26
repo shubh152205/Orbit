@@ -26,6 +26,7 @@ import expo.modules.ReactActivityDelegateWrapper
 class MainActivity : ReactActivity() {
 
   companion object {
+    const val ACTION_PIP_AUDIO = "com.streamnest.app.ACTION_PIP_AUDIO"
     const val ACTION_PIP_PLAY_PAUSE = "com.streamnest.app.ACTION_PIP_PLAY_PAUSE"
     const val ACTION_PIP_NEXT = "com.streamnest.app.ACTION_PIP_NEXT"
 
@@ -43,7 +44,22 @@ class MainActivity : ReactActivity() {
       try {
         val actions = mutableListOf<RemoteAction>()
 
-        // 1. Play / Pause Action
+        // 1. Headphones / Background Audio Action (Matches YouTube PiP Audio Mode)
+        val audioIntent = Intent(ACTION_PIP_AUDIO).setPackage(context.packageName)
+        val audioPendingIntent = PendingIntent.getBroadcast(
+          context,
+          100,
+          audioIntent,
+          PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        actions.add(RemoteAction(
+          Icon.createWithResource(context, R.drawable.ic_pip_audio),
+          "Background Audio",
+          "Background Audio",
+          audioPendingIntent
+        ))
+
+        // 2. Play / Pause Action
         val iconRes = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         val title = if (isPlaying) "Pause" else "Play"
         val intent = Intent(ACTION_PIP_PLAY_PAUSE).setPackage(context.packageName)
@@ -55,7 +71,7 @@ class MainActivity : ReactActivity() {
         )
         actions.add(RemoteAction(Icon.createWithResource(context, iconRes), title, title, pendingIntent))
 
-        // 2. Next Video Action
+        // 3. Next Video Action
         val nextIntent = Intent(ACTION_PIP_NEXT).setPackage(context.packageName)
         val nextPendingIntent = PendingIntent.getBroadcast(
           context,
@@ -117,7 +133,33 @@ class MainActivity : ReactActivity() {
 
   private val pipActionReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
-      if (intent?.action == ACTION_PIP_PLAY_PAUSE) {
+      if (intent?.action == ACTION_PIP_AUDIO) {
+        // 1. Ensure background audio notification service is running
+        BraveMediaPlaybackService.updateState(this@MainActivity, true)
+
+        // 2. Keep WebView playback running in background
+        BraveWebView.activeWebView?.get()?.let { wv ->
+          wv.post {
+            wv.resumeTimers()
+            val script = "(function(){ window.__orbit_user_paused = false; var yt=document.getElementById('movie_player')||document.getElementById('player')||document.querySelector('.html5-video-player'); if(yt&&typeof yt.playVideo==='function'){yt.playVideo();} var v=document.querySelector('video'); if(v&&v.paused){v.play().catch(function(){});} })();"
+            wv.evaluateJavascript(script, null)
+          }
+        }
+
+        // 3. Emit event to React Native bridge
+        try {
+          val reactApp = application as? com.facebook.react.ReactApplication
+          val reactContext = reactApp?.reactNativeHost?.reactInstanceManager?.currentReactContext
+          reactContext
+            ?.getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            ?.emit("onPipAudioModeTriggered", null)
+        } catch (e: Exception) {
+          // Ignore
+        }
+
+        // 4. Move activity to back to dismiss floating PiP window while keeping audio streaming in background
+        moveTaskToBack(true)
+      } else if (intent?.action == ACTION_PIP_PLAY_PAUSE) {
         val willPlay = !isVideoPlaying
         updatePipState(this@MainActivity, willPlay, isAutoPipEnabled, currentSourceRect)
 
@@ -130,9 +172,9 @@ class MainActivity : ReactActivity() {
         BraveWebView.activeWebView?.get()?.let { wv ->
           wv.post {
             val script = if (willPlay) {
-              "(function(){ var yt=document.getElementById('movie_player')||document.getElementById('player')||document.querySelector('.html5-video-player'); if(yt&&typeof yt.playVideo==='function'){yt.playVideo();} var v=document.querySelector('video'); if(v&&v.paused) v.play().catch(function(){}); var btn=document.querySelector('button.player-control-play-pause-icon, .ytp-play-button, button[aria-label=\"Play video\"]'); if(btn) btn.click(); var overlay=document.querySelector('.player-controls-middle, .ytp-bezel'); if(overlay){ overlay.style.display='none'; setTimeout(function(){ overlay.style.display=''; }, 250); } })();"
+              "window.__orbit_user_paused = false; (function(){ var yt=document.getElementById('movie_player')||document.getElementById('player')||document.querySelector('.html5-video-player'); if(yt&&typeof yt.playVideo==='function'){yt.playVideo();} var v=document.querySelector('video'); if(v&&v.paused) v.play().catch(function(){}); var btn=document.querySelector('button.player-control-play-pause-icon, .ytp-play-button, button[aria-label=\"Play video\"]'); if(btn) btn.click(); var overlay=document.querySelector('.player-controls-middle, .ytp-bezel'); if(overlay){ overlay.style.display='none'; setTimeout(function(){ overlay.style.display=''; }, 250); } })();"
             } else {
-              "(function(){ var yt=document.getElementById('movie_player')||document.getElementById('player')||document.querySelector('.html5-video-player'); if(yt&&typeof yt.pauseVideo==='function'){yt.pauseVideo();} var v=document.querySelector('video'); if(v&&!v.paused) v.pause(); var btn=document.querySelector('button.player-control-play-pause-icon, .ytp-play-button, button[aria-label=\"Pause video\"]'); if(btn) btn.click(); })();"
+              "window.__orbit_user_paused = true; (function(){ var yt=document.getElementById('movie_player')||document.getElementById('player')||document.querySelector('.html5-video-player'); if(yt&&typeof yt.pauseVideo==='function'){yt.pauseVideo();} var v=document.querySelector('video'); if(v&&!v.paused){ if(window.__orbit_orig_pause){ window.__orbit_orig_pause.call(v); } else { v.pause(); } } var btn=document.querySelector('button.player-control-play-pause-icon, .ytp-play-button, button[aria-label=\"Pause video\"]'); if(btn) btn.click(); })();"
             }
             wv.evaluateJavascript(script, null)
           }
@@ -168,6 +210,7 @@ class MainActivity : ReactActivity() {
 
     try {
       val filter = IntentFilter().apply {
+        addAction(ACTION_PIP_AUDIO)
         addAction(ACTION_PIP_PLAY_PAUSE)
         addAction(ACTION_PIP_NEXT)
       }
