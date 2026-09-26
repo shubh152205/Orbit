@@ -18,3 +18,9 @@ web-build/
 .DS_Store
 *.log
 *.apk
+
+# Development & Local Screenshot Assets
+ss/
+.agents/
+skills-lock.json
+CLAUDE.md

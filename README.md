@@ -62,9 +62,9 @@ Matching the official YouTube app PiP experience:
 
 ## 📱 Screenshots & Visuals
 
-| Liquid Glass Island & Peeking Cat | YouTube 3-Action PiP Mode | Background Audio & Lock Screen |
+| Orbit Brand Identity | Floating Peeking Cat | High-Performance Engine |
 |:---:|:---:|:---:|
-| <img src="ss/items/1790427246858.png" width="220" alt="Peeking Cat" /> | <img src="ss/Pasted%20image%20(17).png" width="220" alt="PiP Actions" /> | <img src="assets/orbit-logo.png" width="220" alt="Orbit Logo" /> |
+| <img src="assets/orbit-logo.png" width="200" alt="Orbit Logo" /> | <img src="assets/peeking-cat.png" width="160" alt="Peeking Cat" /> | <img src="assets/icon.png" width="200" alt="Orbit App Icon" /> |
 
 ---
 
